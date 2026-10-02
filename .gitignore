@@ -1,0 +1,17 @@
+# Dependencias
+node_modules/
+.npm/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Entorno y Sistema Operativo
+.DS_Store
+Thumbs.db
+.env
+.env.local
+
+# IDEs
+.vscode/
+.idea/

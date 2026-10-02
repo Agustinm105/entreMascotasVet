@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Entre Mascotas | Clínica Veterinaria & Pet Shop</title>
+  <meta name="description" content="Atención médica veterinaria de excelencia, peluquería canina y felina, farmacia y tienda de alimentos y accesorios para mascotas.">
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐾</text></svg>">
+</head>
+<body>
+
+  <!-- Top bar con contacto y urgencias -->
+  <div class="top-bar">
+    <div class="container">
+      <div class="top-bar-item">
+        <span class="top-bar-badge">Urgencias 24h</span>
+        <span>Guardia médica veterinaria activa: <strong>+54 11 4455-8899</strong></span>
+      </div>
+      <div class="top-bar-item">
+        <span>📍 Av. Libertador 2450, Buenos Aires | Lun a Sáb 08:00 a 20:00 hs</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Navbar Principal -->
+  <header class="navbar">
+    <div class="container">
+      <a href="#" class="brand">
+        <div class="brand-icon">🐾</div>
+        <div>Entre<span>Mascotas</span></div>
+      </a>
+
+      <nav>
+        <ul class="nav-links">
+          <li><a href="#inicio" class="nav-link active">Inicio</a></li>
+          <li><a href="#servicios" class="nav-link">Servicios Médicos</a></li>
+          <li><a href="#tienda" class="nav-link">Pet Shop</a></li>
+          <li><a href="#portal" class="nav-link">Mis Mascotas</a></li>
+          <li><a href="#nosotros" class="nav-link">La Clínica</a></li>
+        </ul>
+      </nav>
+
+      <div class="nav-actions">
+        <!-- Botón visor de base de datos para inspección en tiempo real -->
+        <button id="btnOpenDbInspector" class="btn btn-outline" title="Ver estructura y datos de la base de datos">
+          💾 Explorador BD
+        </button>
+
+        <!-- Botón Carrito -->
+        <button id="btnOpenCart" class="btn btn-outline btn-icon" title="Ver Carrito de Compras">
+          🛒
+          <span id="cartCountBadge" class="badge-count">0</span>
+        </button>
+
+        <!-- Botón Reservar Turno -->
+        <button id="btnHeroReserve" class="btn btn-primary">
+          📅 Solicitar Turno
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Hero Section -->
+  <section id="inicio" class="hero">
+    <div class="container">
+      <div class="hero-grid">
+        <div class="hero-content">
+          <div class="hero-pill">
+            <span class="hero-pill-dot"></span>
+            Clínica Veterinaria Integral de Alta Complejidad
+          </div>
+
+          <h1 class="hero-title">
+            Cuidamos a quienes más amás con <span>vocación y tecnología</span>.
+          </h1>
+
+          <p class="hero-desc">
+            En <strong>Entre Mascotas</strong> brindamos atención médica preventiva, cirugías, diagnósticos avanzados, estética canina y felina, junto con la tienda más completa de nutrición y accesorios.
+          </p>
+
+          <div class="hero-cta-group">
+            <button id="btnMainBooking" class="btn btn-primary" style="padding: 0.85rem 1.75rem; font-size: 1.05rem;">
+              📅 Reservar Turno Online
+            </button>
+            <a href="#tienda" class="btn btn-outline" style="padding: 0.85rem 1.6rem; font-size: 1.05rem;">
+              🛍️ Explorar Pet Shop
+            </a>
+          </div>
+
+          <div class="hero-stats">
+            <div>
+              <div class="hero-stat-number">+12.000</div>
+              <div class="hero-stat-label">Mascotas Atendidas</div>
+            </div>
+            <div>
+              <div class="hero-stat-number">100%</div>
+              <div class="hero-stat-label">Profesionales Certificados</div>
+            </div>
+            <div>
+              <div class="hero-stat-number">24/7</div>
+              <div class="hero-stat-label">Guardia de Urgencias</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="hero-media-wrapper">
+          <div class="hero-image-card">
+            <img src="assets/images/hero.jpg" alt="Veterinaria Entre Mascotas con paciente canino y felino">
+          </div>
+
+          <div class="floating-card floating-card-1">
+            <div class="floating-icon icon-emerald">🩺</div>
+            <div class="floating-text">
+              <strong>Control Veterinario</strong>
+              <span>Turnos confirmados en el día</span>
+            </div>
+          </div>
+
+          <div class="floating-card floating-card-2">
+            <div class="floating-icon icon-amber">⭐</div>
+            <div class="floating-text">
+              <strong>4.9 / 5 Estrellas</strong>
+              <span>Más de 850 valoraciones felices</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Features Strip -->
+  <section class="features-strip">
+    <div class="container">
+      <div class="features-grid">
+        <div class="feature-box">
+          <div class="feature-icon">🛡️</div>
+          <div class="feature-text">
+            <h4>Atención Garantizada</h4>
+            <p>Monitoreo constante y protocolos clínicos internacionales.</p>
+          </div>
+        </div>
+        <div class="feature-box">
+          <div class="feature-icon">✨</div>
+          <div class="feature-text">
+            <h4>Spa & Peluquería</h4>
+            <p>Higiene profunda, deslanado y baños relajantes libres de estrés.</p>
+          </div>
+        </div>
+        <div class="feature-box">
+          <div class="feature-icon">🚚</div>
+          <div class="feature-text">
+            <h4>Envíos a Domicilio</h4>
+            <p>Entrega en el día para alimentos balanceados y fármacos.</p>
+          </div>
+        </div>
+        <div class="feature-box">
+          <div class="feature-icon">📋</div>
+          <div class="feature-text">
+            <h4>Historial Digital</h4>
+            <p>Tus mascotas tienen su ficha, vacunas y turnos registrados.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SERVICIOS VETERINARIOS (Mapeo tabla 'servicios') -->
+  <section id="servicios" class="section">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-tag">Servicios Especializados</span>
+        <h2 class="section-title">Cuidado Médico & Estético</h2>
+        <p class="section-desc">
+          Contamos con equipamiento médico de vanguardia y un equipo humano dedicado a la salud y bienestar de tus compañeros de vida.
+        </p>
+      </div>
+
+      <div id="servicesContainer" class="services-grid">
+        <!-- Renderizado dinámico desde db.js -->
+      </div>
+    </div>
+  </section>
+
+  <!-- CATÁLOGO / PET SHOP (Mapeo tablas 'categorias', 'productos') -->
+  <section id="tienda" class="section section-bg">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-tag">Pet Shop & Nutrición</span>
+        <h2 class="section-title">Todo lo que tu Mascota Necesita</h2>
+        <p class="section-desc">
+          Productos seleccionados por nuestros veterinarios: alimentos de primera línea, antipulgas, juguetes seguros y accesorios ergonómicos.
+        </p>
+      </div>
+
+      <!-- Filtros por categoría y barra de búsqueda -->
+      <div class="shop-filters">
+        <div id="categoryPills" class="category-pills">
+          <!-- Renderizado dinámico de categorías -->
+        </div>
+
+        <div class="shop-search">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+          <input type="text" id="searchInput" placeholder="Buscar alimento, accesorio, champú...">
+        </div>
+      </div>
+
+      <div id="productsContainer" class="products-grid">
+        <!-- Renderizado dinámico desde db.js -->
+      </div>
+    </div>
+  </section>
+
+  <!-- PORTAL MIS MASCOTAS / HISTORIAL (Mapeo tablas 'clientes', 'mascotas', 'turnos', 'pedidos') -->
+  <section id="portal" class="section">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-tag">Área de Clientes</span>
+        <h2 class="section-title">Mis Mascotas y Turnos</h2>
+        <p class="section-desc">
+          Consultá los pacientes asociados, próximas citas veterinarias y pedidos realizados en tiempo real.
+        </p>
+      </div>
+
+      <div style="background: #fff; border-radius: var(--radius-xl); border: 1px solid var(--slate-200); padding: 2rem; box-shadow: var(--shadow-sm);">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 2rem; border-bottom: 1px solid var(--slate-200); padding-bottom: 1.25rem;">
+          <div>
+            <h3 id="currentClientTitle" style="font-size: 1.25rem; font-weight: 700; color: var(--slate-900);">
+              Cliente: Agustín Morales
+            </h3>
+            <p id="currentClientSub" style="color: var(--slate-500); font-size: 0.9rem;">
+              agustin.morales@ejemplo.com | Tel: +54 11 4455-8899
+            </p>
+          </div>
+
+          <div style="display: flex; gap: 0.75rem;">
+            <button id="btnAddNewPet" class="btn btn-outline">
+              ➕ Registrar Mascota
+            </button>
+            <button id="btnPortalNewBooking" class="btn btn-primary">
+              📅 Nuevo Turno
+            </button>
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 2rem;">
+          <!-- Columna Mascotas Registradas -->
+          <div>
+            <h4 style="font-size: 1.1rem; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;">
+              🐕 Mascotas Registradas (<span id="petCountBadge">0</span>)
+            </h4>
+            <div id="petsListContainer" style="display: flex; flex-direction: column; gap: 1rem;">
+              <!-- Tarjetas de mascotas -->
+            </div>
+          </div>
+
+          <!-- Columna Turnos Programados -->
+          <div>
+            <h4 style="font-size: 1.1rem; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;">
+              🗓️ Turnos & Consultas (<span id="appointmentsCountBadge">0</span>)
+            </h4>
+            <div id="appointmentsListContainer" style="display: flex; flex-direction: column; gap: 1rem;">
+              <!-- Tarjetas de turnos -->
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECCIÓN NOSOTROS / COMPROMISO -->
+  <section id="nosotros" class="section section-bg">
+    <div class="container">
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 3.5rem; align-items: center;">
+        <div>
+          <span class="section-tag">Vocación y Profesionalismo</span>
+          <h2 class="section-title">Más de 15 años cuidando a cada miembro de tu familia</h2>
+          <p style="color: var(--slate-600); margin-bottom: 1.5rem; line-height: 1.7;">
+            Fundada con la convicción de que las mascotas merecen una medicina compasiva y rigurosa, nuestra clínica cuenta con quirófano propio, laboratorio de análisis clínicos y especialistas en nutrición, dermatología y cardiología veterinaria.
+          </p>
+          <ul style="list-style: none; display: flex; flex-direction: column; gap: 0.8rem; margin-bottom: 2rem;">
+            <li style="display: flex; align-items: center; gap: 0.6rem; font-weight: 600; color: var(--slate-800);">
+              <span style="color: var(--primary-600); font-size: 1.1rem;">✓</span> Protocolos de sedación y anestesia inhalatoria segura.
+            </li>
+            <li style="display: flex; align-items: center; gap: 0.6rem; font-weight: 600; color: var(--slate-800);">
+              <span style="color: var(--primary-600); font-size: 1.1rem;">✓</span> Área de internación y recuperación climatizada con supervisión.
+            </li>
+            <li style="display: flex; align-items: center; gap: 0.6rem; font-weight: 600; color: var(--slate-800);">
+              <span style="color: var(--primary-600); font-size: 1.1rem;">✓</span> Farmacia veterinaria oficial con trazabilidad verificada.
+            </li>
+          </ul>
+        </div>
+        <div>
+          <img src="assets/images/consultation.jpg" alt="Consulta veterinaria profesional" style="border-radius: var(--radius-xl); box-shadow: var(--shadow-xl); border: 4px solid #fff;">
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==========================================================
+       MODAL: RESERVAR TURNO (turnos, clientes, mascotas, servicios)
+       ========================================================== -->
+  <div id="modalBooking" class="modal-overlay">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 class="modal-title">Solicitud de Turno Veterinario</h3>
+        <button type="button" class="modal-close" data-close-modal="modalBooking">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="bookingForm">
+          <div class="step-badge">Paso 1: Servicio y Horario</div>
+
+          <div class="form-group">
+            <label class="form-label">Servicio requerido <span class="req">*</span></label>
+            <select id="bookingServiceSelect" class="form-control" required>
+              <!-- Opciones dinámicas -->
+            </select>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Fecha deseada <span class="req">*</span></label>
+              <input type="date" id="bookingDate" class="form-control" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Hora <span class="req">*</span></label>
+              <select id="bookingTime" class="form-control" required>
+                <option value="09:00">09:00 hs</option>
+                <option value="10:00">10:00 hs</option>
+                <option value="11:30">11:30 hs</option>
+                <option value="14:00">14:00 hs</option>
+                <option value="15:30">15:30 hs</option>
+                <option value="17:00">17:00 hs</option>
+                <option value="18:30">18:30 hs</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="step-badge" style="margin-top: 1rem;">Paso 2: Datos de la Mascota</div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Nombre de la Mascota <span class="req">*</span></label>
+              <input type="text" id="bookingPetName" class="form-control" placeholder="Ej: Milo, Luna..." required>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Raza / Especie</label>
+              <input type="text" id="bookingPetBreed" class="form-control" placeholder="Ej: Caniche, Gato Mestizo...">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Fecha de Nacimiento aprox.</label>
+            <input type="date" id="bookingPetBirth" class="form-control">
+          </div>
+
+          <div class="step-badge" style="margin-top: 1rem;">Paso 3: Datos del Tutor / Cliente</div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Nombre <span class="req">*</span></label>
+              <input type="text" id="bookingClientName" class="form-control" placeholder="Tu nombre" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Apellido <span class="req">*</span></label>
+              <input type="text" id="bookingClientLastname" class="form-control" placeholder="Tu apellido" required>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Email <span class="req">*</span></label>
+              <input type="email" id="bookingClientEmail" class="form-control" placeholder="tu@email.com" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Teléfono / WhatsApp <span class="req">*</span></label>
+              <input type="tel" id="bookingClientPhone" class="form-control" placeholder="+54 11 ..." required>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Motivo o Notas Clínicas</label>
+            <textarea id="bookingNotes" class="form-control" rows="2" placeholder="Describí brevemente síntomas previos, conducta o detalles especiales..."></textarea>
+          </div>
+
+          <button type="submit" class="btn btn-primary" style="width: 100%; padding: 0.85rem; font-size: 1rem; margin-top: 0.5rem;">
+            Confirmar Reserva de Turno
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==========================================================
+       MODAL: REGISTRAR NUEVA MASCOTA (mascotas)
+       ========================================================== -->
+  <div id="modalAddPet" class="modal-overlay">
+    <div class="modal-card" style="max-width: 480px;">
+      <div class="modal-header">
+        <h3 class="modal-title">Registrar Mascota</h3>
+        <button type="button" class="modal-close" data-close-modal="modalAddPet">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="addPetForm">
+          <div class="form-group">
+            <label class="form-label">Nombre de la Mascota <span class="req">*</span></label>
+            <input type="text" id="newPetName" class="form-control" required placeholder="Ej: Rocky">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Raza / Tipo</label>
+            <input type="text" id="newPetBreed" class="form-control" placeholder="Ej: Labrador, Gato Común...">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Fecha de Nacimiento</label>
+            <input type="date" id="newPetBirth" class="form-control">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Notas médicas / Alergias</label>
+            <textarea id="newPetNotes" class="form-control" rows="3" placeholder="Información clínica relevante..."></textarea>
+          </div>
+          <button type="submit" class="btn btn-primary" style="width: 100%; padding: 0.75rem;">
+            Guardar Mascota
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==========================================================
+       MODAL: CHECKOUT DE PEDIDO (pedidos, detalle_pedido)
+       ========================================================== -->
+  <div id="modalCheckout" class="modal-overlay">
+    <div class="modal-card" style="max-width: 520px;">
+      <div class="modal-header">
+        <h3 class="modal-title">Confirmar Compra</h3>
+        <button type="button" class="modal-close" data-close-modal="modalCheckout">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="checkoutForm">
+          <div style="background: var(--slate-50); border: 1px solid var(--slate-200); padding: 1rem; border-radius: var(--radius-md); margin-bottom: 1.25rem;">
+            <div style="display: flex; justify-content: space-between; font-weight: 700; font-size: 1.1rem; color: var(--slate-900);">
+              <span>Total a Pagar:</span>
+              <span id="checkoutTotalText">$0.00</span>
+            </div>
+            <div style="font-size: 0.8rem; color: var(--slate-500); margin-top: 0.25rem;">
+              Entrega a coordinar por nuestro equipo de logística.
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Nombre Completo <span class="req">*</span></label>
+            <input type="text" id="checkoutName" class="form-control" value="Agustín Morales" required>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Email de contacto <span class="req">*</span></label>
+            <input type="email" id="checkoutEmail" class="form-control" value="agustin.morales@ejemplo.com" required>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Dirección de Envío <span class="req">*</span></label>
+            <input type="text" id="checkoutAddress" class="form-control" placeholder="Calle, número, piso/depto..." value="Av. Libertador 2450, Piso 4B" required>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Método de Pago Preferido</label>
+            <select id="checkoutPayment" class="form-control">
+              <option value="efectivo">Efectivo contra entrega (10% descuento)</option>
+              <option value="transferencia">Transferencia bancaria / Alias</option>
+              <option value="tarjeta">Tarjeta de débito / crédito</option>
+            </select>
+          </div>
+
+          <button type="submit" class="btn btn-accent" style="width: 100%; padding: 0.85rem; font-size: 1.05rem;">
+            ✅ Confirmar y Enviar Pedido
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==========================================================
+       SLIDE-OVER: CARRITO DE COMPRAS
+       ========================================================== -->
+  <div id="cartDrawer" class="cart-drawer">
+    <div class="cart-header">
+      <h3 style="font-size: 1.15rem; font-weight: 700; display: flex; align-items: center; gap: 0.5rem;">
+        🛒 Tu Carrito de Compras
+      </h3>
+      <button type="button" id="btnCloseCart" class="modal-close">&times;</button>
+    </div>
+
+    <div id="cartItemsContainer" class="cart-items-list">
+      <!-- Items agregados -->
+    </div>
+
+    <div class="cart-footer">
+      <div class="cart-total-row">
+        <span class="cart-total-label">Subtotal estimado:</span>
+        <span id="cartTotalPrice" class="cart-total-val">$0.00</span>
+      </div>
+      <button id="btnProceedCheckout" class="btn btn-primary" style="width: 100%; padding: 0.85rem; font-size: 1rem;">
+        Iniciar Pedido
+      </button>
+    </div>
+  </div>
+
+  <!-- ==========================================================
+       MODAL: VISOR DE BASE DE DATOS (Interactivo en vivo)
+       ========================================================== -->
+  <div id="modalDbInspector" class="modal-overlay">
+    <div class="modal-card db-modal-card">
+      <div class="modal-header">
+        <div>
+          <h3 class="modal-title" style="display: flex; align-items: center; gap: 0.5rem;">
+            💾 Explorador de Tablas (PostgreSQL Model)
+          </h3>
+          <p style="font-size: 0.8rem; color: var(--slate-500); margin-top: 0.2rem;">
+            Inspeccioná las tablas relacionales en vivo. Cada turno o compra se actualiza al instante.
+          </p>
+        </div>
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+          <button id="btnResetDb" class="btn btn-outline" style="font-size: 0.8rem; padding: 0.4rem 0.75rem;">
+            🔄 Restaurar Semilla
+          </button>
+          <button type="button" class="modal-close" data-close-modal="modalDbInspector">&times;</button>
+        </div>
+      </div>
+
+      <div class="modal-body">
+        <div class="db-tabs">
+          <button class="db-tab-btn active" data-table="turnos">Turnos</button>
+          <button class="db-tab-btn" data-table="clientes">Clientes</button>
+          <button class="db-tab-btn" data-table="mascotas">Mascotas</button>
+          <button class="db-tab-btn" data-table="servicios">Servicios</button>
+          <button class="db-tab-btn" data-table="productos">Productos</button>
+          <button class="db-tab-btn" data-table="categorias">Categorías</button>
+          <button class="db-tab-btn" data-table="pedidos">Pedidos</button>
+          <button class="db-tab-btn" data-table="detalle_pedido">Detalle Pedido</button>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+          <span id="dbTableInfo" style="font-size: 0.85rem; font-weight: 600; color: var(--slate-600);">
+            Tabla: turnos (2 registros)
+          </span>
+          <span style="font-size: 0.75rem; color: var(--primary-700); font-family: monospace;">
+            PostgreSQL DDL: database/schema.sql
+          </span>
+        </div>
+
+        <div class="table-responsive" style="max-height: 380px;">
+          <table class="db-table" id="dbTableView">
+            <!-- Contenido dinámico según tabla seleccionada -->
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notifications Container -->
+  <div id="toastContainer" class="toast-container"></div>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-grid">
+        <div class="footer-col">
+          <div class="footer-brand">
+            <span style="font-size: 1.5rem;">🐾</span> Entre Mascotas
+          </div>
+          <p style="color: var(--slate-400); font-size: 0.9rem; line-height: 1.6; margin-bottom: 1.5rem;">
+            Hospital veterinario, servicios estéticos especializados y pet shop con el más alto estándar de calidad médica y calidez humana.
+          </p>
+          <div style="font-size: 0.85rem; color: var(--slate-400);">
+            📞 Urgencias: +54 11 4455-8899<br>
+            ✉️ contacto@entremascotas.com.ar
+          </div>
+        </div>
+
+        <div class="footer-col">
+          <h4>Navegación</h4>
+          <ul class="footer-links">
+            <li><a href="#inicio">Inicio</a></li>
+            <li><a href="#servicios">Servicios Médicos</a></li>
+            <li><a href="#tienda">Pet Shop & Catálogo</a></li>
+            <li><a href="#portal">Portal Mis Mascotas</a></li>
+          </ul>
+        </div>
+
+        <div class="footer-col">
+          <h4>Especialidades</h4>
+          <ul class="footer-links">
+            <li><a href="#servicios">Consulta Clínica</a></li>
+            <li><a href="#servicios">Baño & Peluquería</a></li>
+            <li><a href="#servicios">Vacunación Oficial</a></li>
+            <li><a href="#servicios">Guardia Veterinaria</a></li>
+          </ul>
+        </div>
+
+        <div class="footer-col">
+          <h4>Horarios de Atención</h4>
+          <p style="color: var(--slate-400); font-size: 0.9rem; margin-bottom: 0.75rem;">
+            <strong>Lunes a Sábado:</strong><br>08:00 a 20:00 hs
+          </p>
+          <p style="color: var(--slate-400); font-size: 0.9rem; margin-bottom: 0.75rem;">
+            <strong>Domingos y Feriados:</strong><br>10:00 a 18:00 hs
+          </p>
+          <p style="color: var(--accent-400); font-size: 0.85rem; font-weight: 700;">
+            Guardia médica activa las 24 horas.
+          </p>
+        </div>
+      </div>
+
+      <div class="footer-bottom">
+        <div>&copy; 2026 Entre Mascotas Veterinaria. Todos los derechos reservados.</div>
+        <div style="display: flex; gap: 1.5rem;">
+          <a href="#" style="color: var(--slate-400);">Términos y Condiciones</a>
+          <a href="#" style="color: var(--slate-400);">Política de Privacidad</a>
+          <a href="#" style="color: var(--slate-400);" id="btnFooterDb">Esquema BD</a>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Scripts -->
+  <script src="js/db.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
