@@ -1,6 +1,6 @@
 # 🐾 Veterinaria "Entre Mascotas" - Sistema Web Integrado
 
-Aplicación web moderna y completa para una clínica veterinaria y pet shop, construida en base al esquema relacional de base de datos PostgreSQL provisto.
+Aplicación web moderna y completa para una clínica veterinaria y pet shop, integrada con **Supabase** (PostgreSQL, Auth con Google, Storage y Row Level Security) y preparada para publicación estática en Netlify.
 
 ---
 
@@ -9,12 +9,15 @@ Aplicación web moderna y completa para una clínica veterinaria y pet shop, con
 ```text
 entreMascotasVet/
 │
-├── database/
-│   └── schema.sql         # Esquema DDL en PostgreSQL (tablas, constraints, índices y seeds)
+├── supabase/
+│   └── setup.sql          # Esquema definitivo en Supabase (PostgreSQL, Auth, RLS, Storage, RPC y Seeds)
+│
+├── docs/
+│   └── CONTEXTO.md        # Contexto técnico, reglas de arquitectura y fases del proyecto
 │
 ├── assets/
 │   └── images/
-│       ├── hero.jpg           # Imagen de portada en alta resolución (veterinaria y pacientes)
+│       ├── hero.jpg           # Imagen de portada en alta resolución
 │       ├── grooming.jpg       # Servicio de peluquería canina y spa
 │       └── consultation.jpg   # Consulta médica veterinaria
 │
@@ -22,52 +25,55 @@ entreMascotasVet/
 │   └── styles.css         # Sistema de diseño moderno (Glassmorphism, tipografía, paleta clínica)
 │
 ├── js/
-│   ├── db.js              # Capa de base de datos local que replica las 8 tablas SQL
-│   └── app.js             # Lógica interactiva (agendamiento, carrito, checkout, explorador BD)
+│   ├── config.js          # Configuración pública del frontend (Supabase URL y Key)
+│   ├── supabase-client.js # Inicialización y exposición del cliente Supabase (window.sb)
+│   ├── auth.js            # Autenticación con Google, perfiles y roles (window.vetAuth)
+│   ├── db.js              # Base de datos local en transición (localStorage)
+│   └── app.js             # Lógica interactiva principal del sitio
 │
+├── admin/                 # Panel de administración dedicado (Backoffice con roles staff y admin)
 ├── index.html             # Página principal completa y responsiva
 └── README.md              # Documentación técnica y guía de uso
 ```
 
 ---
 
-## 🗄️ Mapeo con el Esquema de Base de Datos
+## 🗄️ Esquema de Base de Datos y Supabase
 
-Cada módulo de la interfaz interactúa directamente con una o más tablas del esquema:
+El backend y la base de datos están gestionados por **Supabase** según la definición de [supabase/setup.sql](supabase/setup.sql):
 
-| Módulo en la Web | Tablas Relacionadas | Descripción |
+| Módulo | Entidades y Tablas | Seguridad & Lógica |
 | :--- | :--- | :--- |
-| **Reserva de Turnos** | `servicios`, `turnos`, `mascotas`, `clientes` | Permite solicitar turnos online. Si el cliente o la mascota no existen, los crea automáticamente. |
-| **Pet Shop / Catálogo** | `categorias`, `productos` | Catálogo de productos con filtrado por categoría, buscador en vivo y badges de stock. |
-| **Carrito y Checkout** | `pedidos`, `detalle_pedido`, `productos` | Procesa la orden de compra, genera el pedido con sus líneas de detalle y descuenta stock. |
-| **Portal de Mascotas** | `clientes`, `mascotas`, `turnos` | Muestra el perfil del tutor, sus mascotas registradas con notas clínicas y sus citas activas. |
-| **Explorador de BD** | *Todas las tablas* | Modal interactivo en la barra superior (`💾 Explorador BD`) que permite ver los registros en tiempo real. |
+| **Autenticación y Perfiles** | `auth.users`, `public.perfiles` | Login con Google OAuth, trigger automático `on_auth_user_created`, roles (`cliente`, `empleado`, `admin`). |
+| **Servicios y Turnos** | `servicios`, `mascotas`, `turnos` | Validación de solapamiento de horarios, cálculo de agenda disponible (`horarios_ocupados`), políticas RLS por cliente. |
+| **Catálogo Pet Shop** | `categorias`, `productos` | Búsqueda, control de stock en servidor y bucket de imágenes en Supabase Storage (`productos`). |
+| **Pedidos y Ventas** | `pedidos`, `detalle_pedido` | Creación atómica mediante RPC `crear_pedido(p_items, ...)`, estados de pedido y pago. |
+| **Reportes y Backoffice** | `estadisticas_ventas` | Función RPC exclusiva para personal staff y administradores. |
 
 ---
 
 ## 🚀 Cómo Iniciar el Proyecto
 
-El servidor local ya se encuentra activo en el puerto `3000`. Podés abrir tu navegador en:
-
-👉 **[http://localhost:3000](http://localhost:3000)**
-
-Para iniciarlo manualmente en cualquier momento:
+Para levantar el servidor local en el puerto `3000` (origen autorizado para Google OAuth):
 
 ```powershell
-# Con Python:
-python -m http.server 3000
+# Con npx serve (recomendado):
+npx serve . -l 3000
 
-# O con Node.js / npx:
-npx serve .
+# O con Vite:
+npm run dev
 ```
+
+Podés ingresar en tu navegador en:
+👉 **[http://localhost:3000](http://localhost:3000)**
 
 ---
 
-## 🔮 Próximos Pasos y Modificaciones
+## 🔮 Roadmap de Fases de Migración
 
-Como solicitaste ir modificando la página y la base de datos de a poco, acá tenés algunas opciones para continuar según tus prioridades:
+El proyecto evoluciona en fases ordenadas hacia una arquitectura 100% cloud:
 
-1. **Panel de Administración (Backoffice)**: Añadir sección protegida para que el veterinario cambie el estado de los turnos (`reservado` ➔ `confirmado` ➔ `realizado`) o cargue nuevos productos.
-2. **Historia Clínica Digital**: Agregar una tabla `historial_clinico` (diagnósticos, vacunas aplicadas, peso, tratamientos).
-3. **Backend con Base de Datos Real**: Conectar con una base de datos PostgreSQL real (por ejemplo en Supabase o Node.js / Express / Prisma).
-4. **Pasarela de Pagos**: Integrar checkout con Mercado Pago para cobro de señas de turnos y productos.
+1. **Fase 1 (Actual) - Conexión y Autenticación con Google**: Integración de `@supabase/supabase-js`, `config.js`, `supabase-client.js`, autenticación OAuth con Google, carga de perfiles y menú interactivo de usuario.
+2. **Fase 2 - Migración de Datos y Catálogo**: Reemplazo definitivo de `js/db.js` por consultas en tiempo real a Supabase para turnos, productos, mascotas y pedidos.
+3. **Fase 3 - Panel de Administración (`admin/`)**: Backoffice seguro con diseño independiente para gestión de turnos, inventario, clientes y métricas según el rol (`empleado` / `admin`).
+4. **Fase 4 - Pasarela de Pagos con Mercado Pago**: Integración de Checkout Pro mediante Supabase Edge Functions (`crear-pago` y `mp-webhook`) para cobro automático y actualización de estados.
