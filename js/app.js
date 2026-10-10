@@ -1,94 +1,167 @@
 /**
  * Veterinaria Entre Mascotas - Lógica Principal de la Aplicación
- * Conecta los componentes de la interfaz con la capa de datos (vetDB)
+ * FASE 2: Tienda, catálogo, carrito y checkout conectados con Supabase
  */
 
 document.addEventListener('DOMContentLoaded', () => {
-  // Estado local de la aplicación
-  let currentCategory = 'all';
-  let searchQuery = '';
-  let activeDbTable = 'turnos';
-  let cart = []; // { product, quantity }
-  const currentClientId = 1; // Agustín Morales como cliente activo de demostración
+  'use strict';
+
+  // Helper para escapar HTML seguro (docs/CONTEXTO.md - Regla 3)
+  const esc = window.esc || function (str) {
+    if (str === null || str === undefined) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  };
 
   // ==========================================
-  // FORMATEADORES
+  // ESTADO DE LA APLICACIÓN
+  // ==========================================
+  let catalogCategories = [];
+  let catalogProducts = [];
+  let catalogServices = [];
+
+  let currentCategory = 'all';
+  let searchQuery = '';
+
+  // Carrito persistente en localStorage solo como { producto_id, cantidad }
+  const CART_STORAGE_KEY = 'entre_mascotas_cart';
+  let cart = []; // Array<{ producto_id: number|string, cantidad: number }>
+
+  // ID del cliente local para turnos y mascotas (fase de transición / Phase 3)
+  const currentClientId = 1;
+
+  // ==========================================
+  // FORMATEADORES (docs/CONTEXTO.md - Regla 4)
   // ==========================================
   const formatCurrency = (val) => {
     return new Intl.NumberFormat('es-AR', {
       style: 'currency',
       currency: 'ARS',
       maximumFractionDigits: 0
-    }).format(val);
+    }).format(Number(val) || 0);
   };
 
   const formatDate = (isoString) => {
     if (!isoString) return '-';
-    const d = new Date(isoString);
-    return d.toLocaleDateString('es-AR', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+    try {
+      const d = new Date(isoString);
+      return d.toLocaleDateString('es-AR', {
+        timeZone: 'America/Argentina/Buenos_Aires',
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch {
+      return String(isoString);
+    }
   };
 
   // ==========================================
-  // TOAST NOTIFICATIONS
+  // TOAST NOTIFICATIONS (Sin alert - Regla 6)
   // ==========================================
   const showToast = (message, type = 'success') => {
-    const container = document.getElementById('toastContainer');
+    let container = document.getElementById('toastContainer');
+    if (!container) {
+      container = document.createElement('div');
+      container.id = 'toastContainer';
+      container.className = 'toast-container';
+      document.body.appendChild(container);
+    }
+
     const toast = document.createElement('div');
     toast.className = `toast toast-${type}`;
-    
+
     let icon = '✅';
     if (type === 'info') icon = 'ℹ️';
     if (type === 'warning') icon = '⚠️';
     if (type === 'danger') icon = '❌';
 
-    toast.innerHTML = `
-      <span style="font-size: 1.25rem;">${icon}</span>
-      <div style="font-size: 0.9rem; font-weight: 500; color: var(--slate-800);">${message}</div>
-    `;
+    const iconSpan = document.createElement('span');
+    iconSpan.className = 'toast-icon';
+    iconSpan.textContent = icon;
 
+    const textDiv = document.createElement('div');
+    textDiv.className = 'toast-text';
+    textDiv.textContent = message;
+
+    toast.appendChild(iconSpan);
+    toast.appendChild(textDiv);
     container.appendChild(toast);
-    setTimeout(() => toast.classList.add('show'), 10);
 
+    setTimeout(() => toast.classList.add('show'), 10);
     setTimeout(() => {
       toast.classList.remove('show');
       setTimeout(() => toast.remove(), 350);
-    }, 3800);
+    }, 4200);
   };
 
   // ==========================================
-  // RENDER: SERVICIOS VETERINARIOS
+  // RENDER: SERVICIOS VETERINARIOS (Supabase)
   // ==========================================
-  const renderServices = () => {
+  const renderServices = async () => {
     const container = document.getElementById('servicesContainer');
     const select = document.getElementById('bookingServiceSelect');
     if (!container) return;
 
-    const services = window.vetDB.getAll('servicios').filter(s => s.activo);
+    // Estado de carga
+    container.innerHTML = `
+      <div class="loading-state">
+        <span class="loading-spinner"></span>
+        <p>Cargando servicios veterinarios...</p>
+      </div>
+    `;
+
+    const { data: services, error } = await window.vetApi.getServicios();
+
+    if (error || !services) {
+      container.innerHTML = `
+        <div class="error-state">
+          <p>No se pudieron cargar los servicios en este momento.</p>
+          <button type="button" class="btn btn-outline btn-sm" id="btnRetryServices">
+            🔄 Reintentar
+          </button>
+        </div>
+      `;
+      const retryBtn = document.getElementById('btnRetryServices');
+      if (retryBtn) retryBtn.addEventListener('click', renderServices);
+      return;
+    }
+
+    catalogServices = services;
+
+    if (services.length === 0) {
+      container.innerHTML = `
+        <div class="empty-state">
+          <p>No hay servicios activos disponibles en este momento.</p>
+        </div>
+      `;
+      return;
+    }
 
     container.innerHTML = services.map(s => `
       <article class="service-card">
         <div class="service-card-media">
-          <img src="${s.imagen || 'assets/images/consultation.jpg'}" alt="${s.nombre}" loading="lazy">
-          <span class="service-duration-badge">⏱️ ${s.duracion_min} min</span>
+          <img src="${esc(s.imagen_url || 'assets/images/consultation.jpg')}" alt="${esc(s.nombre)}" loading="lazy">
+          <span class="service-duration-badge">⏱️ ${esc(s.duracion_min)} min</span>
         </div>
         <div class="service-body">
           <h3 class="service-title">
-            <span>${s.icono || '🩺'}</span>
-            ${s.nombre}
+            <span>${esc(s.icono || '🩺')}</span>
+            ${esc(s.nombre)}
           </h3>
-          <p class="service-desc">${s.descripcion}</p>
+          <p class="service-desc">${esc(s.descripcion || '')}</p>
           <div class="service-footer">
             <div class="service-price">
               ${formatCurrency(s.precio)}
               <small>/ sesión</small>
             </div>
-            <button class="btn btn-primary btn-sm btn-book-service" data-service-id="${s.id}" data-service-name="${s.nombre}">
+            <button type="button" class="btn btn-primary btn-sm btn-book-service" data-service-id="${esc(s.id)}" data-service-name="${esc(s.nombre)}">
               Agendar
             </button>
           </div>
@@ -99,11 +172,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // Rellenar select del modal de turnos
     if (select) {
       select.innerHTML = services.map(s => `
-        <option value="${s.id}">${s.nombre} (${s.duracion_min} min - ${formatCurrency(s.precio)})</option>
+        <option value="${esc(s.id)}">${esc(s.nombre)} (${esc(s.duracion_min)} min - ${formatCurrency(s.precio)})</option>
       `).join('');
     }
 
-    // Eventos de botones "Agendar"
+    // Eventos para botones "Agendar"
     container.querySelectorAll('.btn-book-service').forEach(btn => {
       btn.addEventListener('click', () => {
         const sId = btn.getAttribute('data-service-id');
@@ -113,23 +186,68 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   // ==========================================
-  // RENDER: CATEGORÍAS & PRODUCTOS (PET SHOP)
+  // CARGA DE CATÁLOGO: CATEGORÍAS & PRODUCTOS (Supabase)
   // ==========================================
+  const loadCatalog = async () => {
+    const productsContainer = document.getElementById('productsContainer');
+    const pillsContainer = document.getElementById('categoryPills');
+
+    if (productsContainer) {
+      productsContainer.innerHTML = `
+        <div class="loading-state">
+          <span class="loading-spinner"></span>
+          <p>Cargando catálogo de productos...</p>
+        </div>
+      `;
+    }
+
+    // Consultas concurrentes a Supabase
+    const [catRes, prodRes] = await Promise.all([
+      window.vetApi.getCategorias(),
+      window.vetApi.getProductos()
+    ]);
+
+    if (catRes.error || prodRes.error) {
+      console.error('[Catalog] Error al cargar categorías o productos:', catRes.error || prodRes.error);
+      if (productsContainer) {
+        productsContainer.innerHTML = `
+          <div class="error-state">
+            <p>Ocurrió un error al cargar los productos de la tienda.</p>
+            <button type="button" class="btn btn-outline btn-sm" id="btnRetryCatalog">
+              🔄 Reintentar
+            </button>
+          </div>
+        `;
+        const retryBtn = document.getElementById('btnRetryCatalog');
+        if (retryBtn) retryBtn.addEventListener('click', loadCatalog);
+      }
+      return;
+    }
+
+    catalogCategories = catRes.data || [];
+    catalogProducts = prodRes.data || [];
+
+    // Revalidar el carrito contra los productos recién obtenidos
+    revalidateCart(catalogProducts);
+
+    renderCategories();
+    renderProducts();
+  };
+
+  // Renderizar filtros de categoría
   const renderCategories = () => {
     const pillsContainer = document.getElementById('categoryPills');
     if (!pillsContainer) return;
 
-    const categories = window.vetDB.getAll('categorias');
-    
     let html = `
-      <button class="cat-btn ${currentCategory === 'all' ? 'active' : ''}" data-cat-id="all">
+      <button type="button" class="cat-btn ${currentCategory === 'all' ? 'active' : ''}" data-cat-id="all">
         🐾 Todos los Productos
       </button>
     `;
 
-    html += categories.map(c => `
-      <button class="cat-btn ${String(currentCategory) === String(c.id) ? 'active' : ''}" data-cat-id="${c.id}">
-        ${c.nombre}
+    html += catalogCategories.map(c => `
+      <button type="button" class="cat-btn ${String(currentCategory) === String(c.id) ? 'active' : ''}" data-cat-id="${esc(c.id)}">
+        ${esc(c.nombre)}
       </button>
     `).join('');
 
@@ -144,22 +262,23 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   };
 
+  // Renderizar tarjetas de productos
   const renderProducts = () => {
     const container = document.getElementById('productsContainer');
     if (!container) return;
 
-    let products = window.vetDB.getAll('productos').filter(p => p.activo);
+    let products = [...catalogProducts];
 
-    // Filtrar por categoría
+    // Filtro por categoría
     if (currentCategory !== 'all') {
       products = products.filter(p => String(p.categoria_id) === String(currentCategory));
     }
 
-    // Filtrar por texto de búsqueda
+    // Filtro por buscador
     if (searchQuery.trim() !== '') {
       const q = searchQuery.toLowerCase().trim();
-      products = products.filter(p => 
-        p.nombre.toLowerCase().includes(q) || 
+      products = products.filter(p =>
+        (p.nombre && p.nombre.toLowerCase().includes(q)) ||
         (p.descripcion && p.descripcion.toLowerCase().includes(q))
       );
     }
@@ -176,29 +295,43 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const categoriesMap = {};
-    window.vetDB.getAll('categorias').forEach(c => { categoriesMap[c.id] = c.nombre; });
+    catalogCategories.forEach(c => { categoriesMap[c.id] = c.nombre; });
 
     container.innerHTML = products.map(p => {
-      const catName = categoriesMap[p.categoria_id] || 'General';
-      const isLowStock = p.stock <= 10;
+      const catName = p.categorias?.nombre || categoriesMap[p.categoria_id] || 'General';
+      const hasStock = Number(p.stock) > 0;
+      const isLowStock = hasStock && Number(p.stock) <= 10;
+
+      let stockTagHtml = '';
+      if (!hasStock) {
+        stockTagHtml = `<span class="product-stock-tag stock-out">Sin stock</span>`;
+      } else if (isLowStock) {
+        stockTagHtml = `<span class="product-stock-tag stock-low">¡Solo ${esc(p.stock)}! stock</span>`;
+      } else {
+        stockTagHtml = `<span class="product-stock-tag stock-in">${esc(p.stock)} en stock</span>`;
+      }
 
       return `
         <article class="product-card">
           <div class="product-media">
-            <span class="product-cat-tag">${catName}</span>
-            <span class="product-stock-tag ${isLowStock ? 'stock-low' : 'stock-in'}">
-              ${isLowStock ? `¡Solo ${p.stock}! stock` : `${p.stock} en stock`}
-            </span>
-            <img src="${p.imagen_url}" alt="${p.nombre}" loading="lazy">
+            <span class="product-cat-tag">${esc(catName)}</span>
+            ${stockTagHtml}
+            <img src="${esc(p.imagen_url || 'https://images.unsplash.com/photo-1589924691995-400dc9ecc119?w=600')}" alt="${esc(p.nombre)}" loading="lazy">
           </div>
           <div class="product-body">
-            <h4 class="product-name">${p.nombre}</h4>
-            <p class="product-desc">${p.descripcion || ''}</p>
+            <h4 class="product-name">${esc(p.nombre)}</h4>
+            <p class="product-desc">${esc(p.descripcion || '')}</p>
             <div class="product-footer">
               <div class="product-price">${formatCurrency(p.precio)}</div>
-              <button class="btn btn-primary btn-sm btn-add-cart" data-prod-id="${p.id}">
-                🛒 Agregar
-              </button>
+              ${hasStock ? `
+                <button type="button" class="btn btn-primary btn-sm btn-add-cart" data-prod-id="${esc(p.id)}">
+                  🛒 Agregar
+                </button>
+              ` : `
+                <button type="button" class="btn btn-primary btn-sm btn-add-cart" disabled style="opacity: 0.6; cursor: not-allowed;">
+                  Sin stock
+                </button>
+              `}
             </div>
           </div>
         </article>
@@ -206,10 +339,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }).join('');
 
     // Eventos para agregar al carrito
-    container.querySelectorAll('.btn-add-cart').forEach(btn => {
+    container.querySelectorAll('.btn-add-cart:not([disabled])').forEach(btn => {
       btn.addEventListener('click', () => {
         const prodId = btn.getAttribute('data-prod-id');
-        addToCart(Number(prodId));
+        addToCart(prodId);
       });
     });
   };
@@ -224,26 +357,97 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ==========================================
-  // CARRITO DE COMPRAS Y PEDIDOS (pedidos, detalle_pedido)
+  // CARRITO DE COMPRAS (localStorage & Revalidación)
   // ==========================================
+  const loadCartFromStorage = () => {
+    try {
+      const raw = localStorage.getItem(CART_STORAGE_KEY);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return parsed
+          .filter(item => item && item.producto_id !== undefined && Number(item.cantidad) > 0)
+          .map(item => ({
+            producto_id: item.producto_id,
+            cantidad: Number(item.cantidad)
+          }));
+      }
+      return [];
+    } catch (e) {
+      console.warn('[Cart] Error al leer carrito de localStorage:', e);
+      return [];
+    }
+  };
+
+  const saveCartToStorage = () => {
+    try {
+      const simplified = cart.map(item => ({
+        producto_id: item.producto_id,
+        cantidad: Number(item.cantidad)
+      }));
+      localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(simplified));
+    } catch (e) {
+      console.error('[Cart] Error al guardar carrito en localStorage:', e);
+    }
+  };
+
+  // Revalida el carrito contra la base de datos real
+  const revalidateCart = (availableProducts) => {
+    if (!Array.isArray(availableProducts) || availableProducts.length === 0) return;
+
+    let changes = [];
+    const validCart = [];
+
+    cart.forEach(item => {
+      const prod = availableProducts.find(p => String(p.id) === String(item.producto_id));
+
+      if (!prod || !prod.activo || Number(prod.stock) <= 0) {
+        changes.push(`"${prod ? prod.nombre : 'Un producto'}" ya no tiene stock y fue removido de tu carrito.`);
+      } else {
+        let qty = item.cantidad;
+        if (qty > Number(prod.stock)) {
+          qty = Number(prod.stock);
+          changes.push(`Ajustamos la cantidad de "${prod.nombre}" a ${qty} unidad(es) por stock disponible.`);
+        }
+        validCart.push({
+          producto_id: prod.id,
+          cantidad: qty
+        });
+      }
+    });
+
+    const hadChanges = changes.length > 0 || validCart.length !== cart.length;
+    cart = validCart;
+    saveCartToStorage();
+    updateCartUI();
+
+    if (hadChanges) {
+      changes.forEach(msg => showToast(msg, 'warning'));
+    }
+  };
+
   const addToCart = (productId) => {
-    const product = window.vetDB.getById('productos', productId);
-    if (!product || product.stock <= 0) {
+    const product = catalogProducts.find(p => String(p.id) === String(productId));
+    if (!product || Number(product.stock) <= 0) {
       showToast('Producto sin stock disponible.', 'warning');
       return;
     }
 
-    const existing = cart.find(item => item.product.id === productId);
+    const existing = cart.find(item => String(item.producto_id) === String(productId));
     if (existing) {
-      if (existing.quantity >= product.stock) {
-        showToast(`Stock máximo alcanzado (${product.stock} un.)`, 'warning');
+      if (existing.cantidad >= Number(product.stock)) {
+        showToast(`Alcanzaste el stock disponible (${product.stock} un.)`, 'warning');
         return;
       }
-      existing.quantity += 1;
+      existing.cantidad += 1;
     } else {
-      cart.push({ product, quantity: 1 });
+      cart.push({
+        producto_id: product.id,
+        cantidad: 1
+      });
     }
 
+    saveCartToStorage();
     updateCartUI();
     showToast(`¡Agregado al carrito: ${product.nombre}!`, 'success');
   };
@@ -253,10 +457,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const container = document.getElementById('cartItemsContainer');
     const totalEl = document.getElementById('cartTotalPrice');
 
-    const totalCount = cart.reduce((sum, item) => sum + item.quantity, 0);
+    const totalCount = cart.reduce((sum, item) => sum + item.cantidad, 0);
     if (badge) badge.textContent = totalCount;
 
-    const subtotal = cart.reduce((sum, item) => sum + (item.product.precio * item.quantity), 0);
+    let subtotal = 0;
+    cart.forEach(item => {
+      const prod = catalogProducts.find(p => String(p.id) === String(item.producto_id));
+      if (prod) {
+        subtotal += Number(prod.precio) * item.cantidad;
+      }
+    });
+
     if (totalEl) totalEl.textContent = formatCurrency(subtotal);
 
     if (!container) return;
@@ -272,35 +483,41 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    container.innerHTML = cart.map(item => `
-      <div class="cart-item">
-        <img src="${item.product.imagen_url}" alt="${item.product.nombre}" class="cart-item-img">
-        <div class="cart-item-info">
-          <div class="cart-item-name">${item.product.nombre}</div>
-          <div class="cart-item-price">${formatCurrency(item.product.precio)}</div>
-          <div class="cart-qty-ctrl">
-            <button class="cart-qty-btn btn-cart-dec" data-id="${item.product.id}">-</button>
-            <span class="cart-qty-num">${item.quantity}</span>
-            <button class="cart-qty-btn btn-cart-inc" data-id="${item.product.id}">+</button>
-            <button class="btn btn-ghost btn-cart-remove" data-id="${item.product.id}" style="font-size: 0.75rem; color: var(--danger); margin-left: auto; padding: 0.2rem 0.4rem;">
-              Quitar
-            </button>
+    container.innerHTML = cart.map(item => {
+      const prod = catalogProducts.find(p => String(p.id) === String(item.producto_id));
+      if (!prod) return '';
+
+      return `
+        <div class="cart-item">
+          <img src="${esc(prod.imagen_url || 'https://images.unsplash.com/photo-1589924691995-400dc9ecc119?w=600')}" alt="${esc(prod.nombre)}" class="cart-item-img">
+          <div class="cart-item-info">
+            <div class="cart-item-name">${esc(prod.nombre)}</div>
+            <div class="cart-item-price">${formatCurrency(prod.precio)}</div>
+            <div class="cart-qty-ctrl">
+              <button type="button" class="cart-qty-btn btn-cart-dec" data-id="${esc(prod.id)}">-</button>
+              <span class="cart-qty-num">${esc(item.cantidad)}</span>
+              <button type="button" class="cart-qty-btn btn-cart-inc" data-id="${esc(prod.id)}">+</button>
+              <button type="button" class="btn btn-ghost btn-cart-remove" data-id="${esc(prod.id)}" style="font-size: 0.75rem; color: var(--danger); margin-left: auto; padding: 0.2rem 0.4rem;">
+                Quitar
+              </button>
+            </div>
           </div>
         </div>
-      </div>
-    `).join('');
+      `;
+    }).join('');
 
-    // Botones de cantidad dentro del carrito
+    // Listeners de controles de cantidad
     container.querySelectorAll('.btn-cart-dec').forEach(btn => {
       btn.addEventListener('click', () => {
-        const id = Number(btn.getAttribute('data-id'));
-        const item = cart.find(i => i.product.id === id);
+        const id = btn.getAttribute('data-id');
+        const item = cart.find(i => String(i.producto_id) === String(id));
         if (item) {
-          if (item.quantity > 1) {
-            item.quantity -= 1;
+          if (item.cantidad > 1) {
+            item.cantidad -= 1;
           } else {
-            cart = cart.filter(i => i.product.id !== id);
+            cart = cart.filter(i => String(i.producto_id) !== String(id));
           }
+          saveCartToStorage();
           updateCartUI();
         }
       });
@@ -308,14 +525,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
     container.querySelectorAll('.btn-cart-inc').forEach(btn => {
       btn.addEventListener('click', () => {
-        const id = Number(btn.getAttribute('data-id'));
-        const item = cart.find(i => i.product.id === id);
-        if (item) {
-          if (item.quantity < item.product.stock) {
-            item.quantity += 1;
+        const id = btn.getAttribute('data-id');
+        const item = cart.find(i => String(i.producto_id) === String(id));
+        const prod = catalogProducts.find(p => String(p.id) === String(id));
+        if (item && prod) {
+          if (item.cantidad < Number(prod.stock)) {
+            item.cantidad += 1;
+            saveCartToStorage();
             updateCartUI();
           } else {
-            showToast('No hay más stock disponible', 'warning');
+            showToast(`Llegaste al límite de stock (${prod.stock} un.)`, 'warning');
           }
         }
       });
@@ -323,14 +542,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     container.querySelectorAll('.btn-cart-remove').forEach(btn => {
       btn.addEventListener('click', () => {
-        const id = Number(btn.getAttribute('data-id'));
-        cart = cart.filter(i => i.product.id !== id);
+        const id = btn.getAttribute('data-id');
+        cart = cart.filter(i => String(i.producto_id) !== String(id));
+        saveCartToStorage();
         updateCartUI();
       });
     });
   };
 
-  // Abrir / Cerrar Carrito Drawer
+  // Abrir y cerrar Drawer del Carrito
   const cartDrawer = document.getElementById('cartDrawer');
   const btnOpenCart = document.getElementById('btnOpenCart');
   const btnCloseCart = document.getElementById('btnCloseCart');
@@ -342,79 +562,604 @@ document.addEventListener('DOMContentLoaded', () => {
     btnCloseCart.addEventListener('click', () => cartDrawer.classList.remove('active'));
   }
 
-  // Checkout modal
+  // ==========================================
+  // CHECKOUT DE COMPRA REAL (Supabase & Mercado Pago)
+  // ==========================================
   const btnProceedCheckout = document.getElementById('btnProceedCheckout');
   const modalCheckout = document.getElementById('modalCheckout');
+  const checkoutForm = document.getElementById('checkoutForm');
   const checkoutTotalText = document.getElementById('checkoutTotalText');
+  const checkoutItemsSummary = document.getElementById('checkoutItemsSummary');
+  const checkoutAuthPrompt = document.getElementById('checkoutAuthPrompt');
+  const checkoutFormContent = document.getElementById('checkoutFormContent');
+  const checkoutUserDisplay = document.getElementById('checkoutUserDisplay');
+  const checkoutAddress = document.getElementById('checkoutAddress');
+  const checkoutPhone = document.getElementById('checkoutPhone');
+  const btnCheckoutGoogleLogin = document.getElementById('btnCheckoutGoogleLogin');
+  const btnConfirmCheckout = document.getElementById('btnConfirmCheckout');
+
+  const labelEnvio = document.getElementById('labelEnvio');
+  const labelRetiro = document.getElementById('labelRetiro');
+  const checkoutEnvioDetails = document.getElementById('checkoutEnvioDetails');
+  const checkoutRetiroDetails = document.getElementById('checkoutRetiroDetails');
+
+  // Alternar entre Envío y Retiro
+  const handleDeliveryToggle = () => {
+    const selected = document.querySelector('input[name="checkoutTipoEntrega"]:checked')?.value || 'envio';
+
+    if (selected === 'envio') {
+      if (checkoutEnvioDetails) checkoutEnvioDetails.style.display = 'block';
+      if (checkoutRetiroDetails) checkoutRetiroDetails.style.display = 'none';
+      if (labelEnvio) labelEnvio.classList.add('active');
+      if (labelRetiro) labelRetiro.classList.remove('active');
+      if (checkoutAddress) checkoutAddress.required = true;
+    } else {
+      if (checkoutEnvioDetails) checkoutEnvioDetails.style.display = 'none';
+      if (checkoutRetiroDetails) checkoutRetiroDetails.style.display = 'block';
+      if (labelEnvio) labelEnvio.classList.remove('active');
+      if (labelRetiro) labelRetiro.classList.add('active');
+      if (checkoutAddress) checkoutAddress.required = false;
+    }
+  };
+
+  document.querySelectorAll('input[name="checkoutTipoEntrega"]').forEach(radio => {
+    radio.addEventListener('change', handleDeliveryToggle);
+  });
+
+  // Abrir Modal de Checkout y preparar datos del usuario
+  const openCheckoutModal = () => {
+    if (cart.length === 0) {
+      showToast('Agregá al menos un producto al carrito para comprar.', 'warning');
+      return;
+    }
+
+    if (cartDrawer) cartDrawer.classList.remove('active');
+
+    // Calcular subtotal estimado
+    let subtotal = 0;
+    let itemsCount = 0;
+    cart.forEach(item => {
+      const prod = catalogProducts.find(p => String(p.id) === String(item.producto_id));
+      if (prod) {
+        subtotal += Number(prod.precio) * item.cantidad;
+        itemsCount += item.cantidad;
+      }
+    });
+
+    if (checkoutTotalText) checkoutTotalText.textContent = formatCurrency(subtotal);
+    if (checkoutItemsSummary) {
+      checkoutItemsSummary.textContent = `${itemsCount} producto(s) en tu orden. El total es calculado y validado por la base de datos.`;
+    }
+
+    // Verificar estado de sesión actual
+    const session = window.vetAuth ? window.vetAuth.obtenerSesion() : null;
+    const perfil = window.vetAuth ? window.vetAuth.obtenerPerfil() : null;
+
+    if (!session || !session.user) {
+      // Usuario no autenticado: requerir login
+      if (checkoutAuthPrompt) checkoutAuthPrompt.style.display = 'block';
+      if (checkoutFormContent) checkoutFormContent.style.display = 'none';
+    } else {
+      // Usuario autenticado: mostrar formulario con datos precargados
+      if (checkoutAuthPrompt) checkoutAuthPrompt.style.display = 'none';
+      if (checkoutFormContent) checkoutFormContent.style.display = 'block';
+
+      let nombreCompleto = '';
+      if (perfil) {
+        nombreCompleto = (perfil.nombre || '') + (perfil.apellido ? ' ' + perfil.apellido : '');
+      }
+      if (!nombreCompleto) {
+        nombreCompleto = session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'Cliente';
+      }
+
+      const email = perfil?.email || session.user.email || '';
+
+      if (checkoutUserDisplay) {
+        checkoutUserDisplay.textContent = `${nombreCompleto} (${email})`;
+      }
+
+      // Precargar dirección y teléfono de la base
+      if (checkoutAddress) {
+        checkoutAddress.value = perfil?.direccion || '';
+      }
+      if (checkoutPhone) {
+        checkoutPhone.value = perfil?.telefono || '';
+      }
+
+      handleDeliveryToggle();
+    }
+
+    openModal(modalCheckout);
+  };
 
   if (btnProceedCheckout) {
-    btnProceedCheckout.addEventListener('click', () => {
-      if (cart.length === 0) {
-        showToast('Agregá al menos un producto al carrito para comprar.', 'warning');
-        return;
-      }
-      cartDrawer.classList.remove('active');
-      const subtotal = cart.reduce((sum, item) => sum + (item.product.precio * item.quantity), 0);
-      if (checkoutTotalText) checkoutTotalText.textContent = formatCurrency(subtotal);
-      openModal(modalCheckout);
+    btnProceedCheckout.addEventListener('click', openCheckoutModal);
+  }
+
+  if (btnCheckoutGoogleLogin) {
+    btnCheckoutGoogleLogin.addEventListener('click', () => {
+      if (window.vetAuth) window.vetAuth.loginConGoogle();
     });
   }
 
-  // Confirmar compra (INSERT en pedidos y detalle_pedido)
-  const checkoutForm = document.getElementById('checkoutForm');
+  // Confirmación del Pedido y Llamada a Supabase RPC crear_pedido
   if (checkoutForm) {
-    checkoutForm.addEventListener('submit', (e) => {
+    checkoutForm.addEventListener('submit', async (e) => {
       e.preventDefault();
 
-      const subtotal = cart.reduce((sum, item) => sum + (item.product.precio * item.quantity), 0);
-      const address = document.getElementById('checkoutAddress').value;
+      const session = window.vetAuth ? window.vetAuth.obtenerSesion() : null;
+      if (!session || !session.user) {
+        showToast('Debés iniciar sesión con Google para confirmar la compra.', 'warning');
+        return;
+      }
 
-      // 1. Inserción en tabla 'pedidos'
-      const nuevoPedido = window.vetDB.insert('pedidos', {
-        cliente_id: currentClientId,
-        fecha: new Date().toISOString(),
-        estado: 'pendiente',
-        direccion_envio: address,
-        total: subtotal
-      });
+      if (cart.length === 0) {
+        showToast('El carrito está vacío.', 'warning');
+        return;
+      }
 
-      // 2. Inserciones en 'detalle_pedido' y descuento de stock
-      cart.forEach(item => {
-        window.vetDB.insert('detalle_pedido', {
-          pedido_id: nuevoPedido.id,
-          producto_id: item.product.id,
-          cantidad: item.quantity,
-          precio_unitario: item.product.precio
+      const tipoEntrega = document.querySelector('input[name="checkoutTipoEntrega"]:checked')?.value || 'envio';
+      const addressVal = checkoutAddress ? checkoutAddress.value.trim() : '';
+      const phoneVal = checkoutPhone ? checkoutPhone.value.trim() : '';
+
+      if (tipoEntrega === 'envio' && !addressVal) {
+        showToast('Por favor, ingresá la dirección de entrega.', 'warning');
+        if (checkoutAddress) checkoutAddress.focus();
+        return;
+      }
+
+      if (!phoneVal) {
+        showToast('El teléfono es obligatorio para coordinar la entrega.', 'warning');
+        if (checkoutPhone) checkoutPhone.focus();
+        return;
+      }
+
+      // Preparar payload seguro: NUNCA enviar precios ni totales (docs/CONTEXTO.md - Regla 2)
+      const p_items = cart.map(item => ({
+        producto_id: item.producto_id,
+        cantidad: item.cantidad
+      }));
+
+      // Deshabilitar botón durante el envío
+      if (btnConfirmCheckout) {
+        btnConfirmCheckout.disabled = true;
+        btnConfirmCheckout.textContent = '⏳ Creando pedido...';
+      }
+
+      try {
+        const { data: pedidoId, error } = await window.vetApi.crearPedido({
+          items: p_items,
+          tipoEntrega,
+          direccion: addressVal
         });
 
-        // Actualizar stock del producto
-        const currentProd = window.vetDB.getById('productos', item.product.id);
-        if (currentProd) {
-          window.vetDB.update('productos', item.product.id, {
-            stock: Math.max(0, currentProd.stock - item.quantity)
-          });
+        if (error) {
+          console.error('[Checkout] Error al crear pedido:', error);
+          showToast(error.message || 'Error al procesar el pedido. Verificá el stock disponible.', 'danger');
+
+          // Refrescar catálogo para mostrar el stock actualizado
+          await loadCatalog();
+          return;
         }
-      });
 
-      // Limpiar carrito y cerrar modal
-      cart = [];
-      updateCartUI();
-      closeModal(modalCheckout);
-      renderProducts();
-      refreshDbInspector();
+        // Éxito en la creación del pedido
+        // Actualizar teléfono o dirección en el perfil si correspondiera
+        const perfil = window.vetAuth ? window.vetAuth.obtenerPerfil() : null;
+        const updates = {};
+        if (!perfil?.telefono || perfil.telefono !== phoneVal) {
+          updates.telefono = phoneVal;
+        }
+        if (tipoEntrega === 'envio' && (!perfil?.direccion || perfil.direccion !== addressVal)) {
+          updates.direccion = addressVal;
+        }
 
-      showToast(`¡Pedido #${nuevoPedido.id} creado con éxito! Registrado en la base de datos.`, 'success');
+        if (Object.keys(updates).length > 0) {
+          window.vetApi.actualizarPerfil(session.user.id, updates).then(() => {
+            if (window.vetAuth && window.vetAuth.perfil) {
+              Object.assign(window.vetAuth.perfil, updates);
+            }
+          }).catch(err => console.warn('[Checkout] No se pudo actualizar datos del perfil:', err));
+        }
+
+        // Vaciar carrito
+        cart = [];
+        saveCartToStorage();
+        updateCartUI();
+
+        // Cerrar modal
+        closeModal(modalCheckout);
+
+        // Actualizar stock de la tienda
+        await loadCatalog();
+
+        // Invocar Edge Function crear-pago
+        showToast(`¡Pedido #${pedidoId} creado con éxito!`, 'success');
+
+        const mpRes = await window.vetApi.crearPago(pedidoId);
+        if (mpRes && mpRes.data && mpRes.data.init_point) {
+          window.location.href = mpRes.data.init_point;
+          return;
+        } else {
+          // Si la Edge function aún no está desplegada o falla, NO es un error fatal (docs/CONTEXTO.md)
+          showToast(`Tu pedido #${pedidoId} fue creado. El pago todavía no está disponible; podés completarlo desde Mis pedidos.`, 'info');
+
+          // Activar pestaña de Mis Pedidos y hacer scroll suave al portal
+          activarTabPortal('pedidos');
+          renderMisPedidos();
+          const portalEl = document.getElementById('portal');
+          if (portalEl) portalEl.scrollIntoView({ behavior: 'smooth' });
+        }
+      } catch (err) {
+        console.error('[Checkout] Excepción:', err);
+        showToast('Ocurrió un error inesperado al procesar el pedido.', 'danger');
+      } finally {
+        if (btnConfirmCheckout) {
+          btnConfirmCheckout.disabled = false;
+          btnConfirmCheckout.textContent = '✅ Confirmar Pedido';
+        }
+      }
     });
   }
 
   // ==========================================
-  // RESERVA DE TURNOS (turnos, clientes, mascotas, servicios)
+  // PORTAL CLIENTE: PESTAÑAS & MIS PEDIDOS
+  // ==========================================
+  const tabBtnMascotasTurnos = document.getElementById('tabBtnMascotasTurnos');
+  const tabBtnMisPedidos = document.getElementById('tabBtnMisPedidos');
+  const tabContentMascotasTurnos = document.getElementById('tabContentMascotasTurnos');
+  const tabContentMisPedidos = document.getElementById('tabContentMisPedidos');
+
+  const activarTabPortal = (tab) => {
+    if (tab === 'pedidos') {
+      if (tabContentMascotasTurnos) tabContentMascotasTurnos.style.display = 'none';
+      if (tabContentMisPedidos) tabContentMisPedidos.style.display = 'block';
+
+      if (tabBtnMascotasTurnos) {
+        tabBtnMascotasTurnos.classList.remove('active');
+        tabBtnMascotasTurnos.style.borderBottomColor = 'transparent';
+        tabBtnMascotasTurnos.style.color = 'var(--slate-500)';
+      }
+      if (tabBtnMisPedidos) {
+        tabBtnMisPedidos.classList.add('active');
+        tabBtnMisPedidos.style.borderBottomColor = 'var(--primary-600)';
+        tabBtnMisPedidos.style.color = 'var(--primary-700)';
+      }
+    } else {
+      if (tabContentMascotasTurnos) tabContentMascotasTurnos.style.display = 'block';
+      if (tabContentMisPedidos) tabContentMisPedidos.style.display = 'none';
+
+      if (tabBtnMascotasTurnos) {
+        tabBtnMascotasTurnos.classList.add('active');
+        tabBtnMascotasTurnos.style.borderBottomColor = 'var(--primary-600)';
+        tabBtnMascotasTurnos.style.color = 'var(--primary-700)';
+      }
+      if (tabBtnMisPedidos) {
+        tabBtnMisPedidos.classList.remove('active');
+        tabBtnMisPedidos.style.borderBottomColor = 'transparent';
+        tabBtnMisPedidos.style.color = 'var(--slate-500)';
+      }
+    }
+  };
+
+  if (tabBtnMascotasTurnos) {
+    tabBtnMascotasTurnos.addEventListener('click', () => activarTabPortal('mascotas'));
+  }
+  if (tabBtnMisPedidos) {
+    tabBtnMisPedidos.addEventListener('click', () => {
+      activarTabPortal('pedidos');
+      renderMisPedidos();
+    });
+  }
+
+  // Renderizar la lista de pedidos del usuario autenticado
+  const renderMisPedidos = async () => {
+    const container = document.getElementById('portalOrdersContainer');
+    const badge = document.getElementById('portalOrdersCount');
+    if (!container) return;
+
+    const session = window.vetAuth ? window.vetAuth.obtenerSesion() : null;
+
+    if (!session || !session.user) {
+      if (badge) badge.textContent = '0';
+      container.innerHTML = `
+        <div class="empty-state" style="padding: 2.5rem 1rem;">
+          <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">🔒</div>
+          <h4 style="font-weight: 700; color: var(--slate-800); margin-bottom: 0.3rem;">Iniciá sesión para ver tus pedidos</h4>
+          <p style="color: var(--slate-500); font-size: 0.9rem; margin-bottom: 1.25rem;">
+            Podrás seguir el estado de preparación, realizar pagos y gestionar tus compras.
+          </p>
+          <button type="button" class="btn btn-outline btn-google" id="btnOrdersLogin">
+            Ingresar con Google
+          </button>
+        </div>
+      `;
+      const loginBtn = document.getElementById('btnOrdersLogin');
+      if (loginBtn) {
+        loginBtn.addEventListener('click', () => {
+          if (window.vetAuth) window.vetAuth.loginConGoogle();
+        });
+      }
+      return;
+    }
+
+    container.innerHTML = `
+      <div class="loading-state">
+        <span class="loading-spinner"></span>
+        <p>Cargando tus pedidos...</p>
+      </div>
+    `;
+
+    const { data: pedidos, error } = await window.vetApi.getMisPedidos();
+
+    if (error || !pedidos) {
+      container.innerHTML = `
+        <div class="error-state">
+          <p>No pudimos cargar tus pedidos en este momento.</p>
+          <button type="button" class="btn btn-outline btn-sm" id="btnRetryOrders">
+            🔄 Reintentar
+          </button>
+        </div>
+      `;
+      const retryBtn = document.getElementById('btnRetryOrders');
+      if (retryBtn) retryBtn.addEventListener('click', renderMisPedidos);
+      return;
+    }
+
+    if (badge) badge.textContent = pedidos.length;
+
+    if (pedidos.length === 0) {
+      container.innerHTML = `
+        <div class="empty-state">
+          <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">📦</div>
+          <h4 style="font-weight: 700; color: var(--slate-800);">Aún no realizaste ningún pedido</h4>
+          <p style="color: var(--slate-500); font-size: 0.9rem; margin-top: 0.25rem;">
+            ¡Explorá nuestro Pet Shop para consentir a tu mascota!
+          </p>
+          <a href="#tienda" class="btn btn-primary btn-sm" style="margin-top: 1rem; display: inline-block;">
+            Ir al Pet Shop
+          </a>
+        </div>
+      `;
+      return;
+    }
+
+    // Mapeo de estados según docs/CONTEXTO.md
+    const getStatusInfo = (estado, tipoEntrega) => {
+      switch (estado) {
+        case 'pendiente_pago':
+          return { label: 'Pendiente de pago', className: 'badge-pendiente_pago' };
+        case 'preparando':
+          return { label: 'Preparándose', className: 'badge-preparando' };
+        case 'en_camino':
+          return { label: 'En camino', className: 'badge-en_camino' };
+        case 'completado':
+          return {
+            label: tipoEntrega === 'envio' ? 'Entregado' : 'Retirado',
+            className: 'badge-completado'
+          };
+        case 'cancelado':
+          return { label: 'Cancelado', className: 'badge-cancelado' };
+        default:
+          return { label: estado, className: 'badge-status' };
+      }
+    };
+
+    container.innerHTML = pedidos.map(p => {
+      const statusInfo = getStatusInfo(p.estado, p.tipo_entrega);
+      const isPendiente = p.estado === 'pendiente_pago';
+      const items = Array.isArray(p.detalle_pedido) ? p.detalle_pedido : [];
+
+      return `
+        <article class="order-card">
+          <div class="order-header">
+            <div>
+              <div class="order-id">Pedido #${esc(p.id)}</div>
+              <div class="order-date">🗓️ ${formatDate(p.fecha)}</div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+              <span class="badge-status ${statusInfo.className}">${esc(statusInfo.label)}</span>
+            </div>
+          </div>
+
+          <div style="font-size: 0.88rem; color: var(--slate-600); margin-bottom: 0.65rem;">
+            ${p.tipo_entrega === 'envio' ? `
+              <span>🚚 <strong>Envío a domicilio:</strong> ${esc(p.direccion_envio || 'Dirección registrada')}</span>
+            ` : `
+              <span>🏪 <strong>Retiro en el local:</strong> Av. Libertador 2450</span>
+            `}
+          </div>
+
+          <div style="font-size: 0.82rem; font-weight: 700; color: var(--slate-700); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 0.65rem;">
+            Productos:
+          </div>
+
+          <ul class="order-items">
+            ${items.map(item => `
+              <li class="order-item-row">
+                <span>
+                  <strong>${esc(item.cantidad)}x</strong> ${esc(item.productos?.nombre || 'Producto')}
+                </span>
+                <span style="font-weight: 600; color: var(--slate-800);">
+                  ${formatCurrency(item.precio_unitario * item.cantidad)}
+                </span>
+              </li>
+            `).join('')}
+          </ul>
+
+          <div class="order-footer">
+            <div class="order-total">
+              Total: ${formatCurrency(p.total)}
+            </div>
+
+            ${isPendiente ? `
+              <div class="order-actions">
+                <button type="button" class="btn btn-outline btn-sm btn-cancel-order" data-pedido-id="${esc(p.id)}" style="color: var(--danger); font-size: 0.8rem; padding: 0.35rem 0.65rem;">
+                  ❌ Cancelar
+                </button>
+                <button type="button" class="btn btn-primary btn-sm btn-pay-order" data-pedido-id="${esc(p.id)}" style="font-size: 0.8rem; padding: 0.35rem 0.75rem;">
+                  💳 Pagar ahora
+                </button>
+              </div>
+            ` : ''}
+          </div>
+        </article>
+      `;
+    }).join('');
+
+    // Eventos de botones "Pagar ahora"
+    container.querySelectorAll('.btn-pay-order').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const pedidoId = btn.getAttribute('data-pedido-id');
+        btn.disabled = true;
+        btn.textContent = '⏳ Cargando...';
+
+        try {
+          const res = await window.vetApi.crearPago(pedidoId);
+          if (res && res.data && res.data.init_point) {
+            window.location.href = res.data.init_point;
+          } else {
+            showToast('El servicio de pago todavía no está disponible. Podrás completarlo próximamente.', 'info');
+          }
+        } catch (err) {
+          console.warn('[Orders] Error al intentar pagar:', err);
+          showToast('No se pudo iniciar el pago en este momento.', 'warning');
+        } finally {
+          btn.disabled = false;
+          btn.textContent = '💳 Pagar ahora';
+        }
+      });
+    });
+
+    // Eventos de botones "Cancelar pedido"
+    container.querySelectorAll('.btn-cancel-order').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const pedidoId = btn.getAttribute('data-pedido-id');
+        const confirma = confirm(`¿Estás seguro de que querés cancelar el pedido #${pedidoId}? El stock de los productos será devuelto a la tienda.`);
+        if (!confirma) return;
+
+        btn.disabled = true;
+        btn.textContent = '⏳ Cancelando...';
+
+        const { error } = await window.vetApi.cancelarPedido(pedidoId);
+        if (error) {
+          showToast(error.message || 'No se pudo cancelar el pedido.', 'danger');
+          btn.disabled = false;
+          btn.textContent = '❌ Cancelar';
+        } else {
+          showToast(`Pedido #${pedidoId} cancelado. El stock fue reintegrado con éxito.`, 'info');
+          // Refrescar pedidos y tienda
+          await Promise.all([renderMisPedidos(), loadCatalog()]);
+        }
+      });
+    });
+  };
+
+  // ==========================================
+  // RETORNO DE MERCADO PAGO (?pago=ok|pendiente|error &pedido=ID)
+  // ==========================================
+  const verificarRetornoMercadoPago = async () => {
+    const params = new URLSearchParams(window.location.search);
+    const estadoPago = params.get('pago');
+    const pedidoId = params.get('pedido');
+
+    if (!estadoPago || !pedidoId) return;
+
+    // Abrir la pestaña de Mis Pedidos y hacer foco en el portal
+    activarTabPortal('pedidos');
+    const portalEl = document.getElementById('portal');
+    if (portalEl) portalEl.scrollIntoView({ behavior: 'smooth' });
+
+    // Limpiar URL sin recargar para no re-ejecutar en refresh
+    const cleanUrl = window.location.origin + window.location.pathname;
+    window.history.replaceState(null, document.title, cleanUrl);
+
+    if (estadoPago === 'ok') {
+      // El navegador NUNCA marca un pedido como pagado (lo hace solo el webhook).
+      // Consultamos el estado actual
+      const { data: pedido } = await window.vetApi.getPedidoPorId(pedidoId);
+
+      if (pedido && (pedido.pago_estado === 'aprobado' || pedido.estado !== 'pendiente_pago')) {
+        showToast('¡Pago aprobado! Estamos preparando tu pedido.', 'success');
+        renderMisPedidos();
+      } else {
+        // Aún figura pendiente: mostrar "Estamos confirmando tu pago" y recargar cada 5s hasta 1 minuto
+        showToast('Estamos confirmando tu pago con Mercado Pago...', 'info');
+
+        let intentos = 0;
+        const maxIntentos = 12; // 12 x 5s = 60 segundos (1 minuto)
+
+        const polling = setInterval(async () => {
+          intentos++;
+          const res = await window.vetApi.getPedidoPorId(pedidoId);
+          const p = res?.data;
+
+          if (p && (p.pago_estado === 'aprobado' || p.estado !== 'pendiente_pago')) {
+            clearInterval(polling);
+            showToast('¡Pago confirmado! Estamos preparando tu pedido.', 'success');
+            renderMisPedidos();
+          } else if (intentos >= maxIntentos) {
+            clearInterval(polling);
+            showToast('Tu pago está siendo procesado por Mercado Pago. Te avisaremos cuando se confirme.', 'info');
+            renderMisPedidos();
+          }
+        }, 5000);
+      }
+    } else if (estadoPago === 'pendiente') {
+      showToast('Tu pago está pendiente de acreditación.', 'warning');
+      renderMisPedidos();
+    } else if (estadoPago === 'error') {
+      showToast('No se pudo completar el pago, podés reintentarlo desde Mis pedidos.', 'danger');
+      renderMisPedidos();
+    }
+  };
+
+  // ==========================================
+  // SINCRONIZACIÓN CON EVENTOS DE AUTENTICACIÓN
+  // ==========================================
+  document.addEventListener('vet:authchange', async (e) => {
+    const { session, perfil } = e.detail || {};
+
+    const clientTitle = document.getElementById('currentClientTitle');
+    const clientSub = document.getElementById('currentClientSub');
+
+    if (session && session.user) {
+      let nombre = perfil?.nombre ? (perfil.nombre + (perfil.apellido ? ' ' + perfil.apellido : '')) : '';
+      if (!nombre) {
+        nombre = session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'Cliente';
+      }
+      const email = perfil?.email || session.user.email || '';
+      const tel = perfil?.telefono ? ` | Tel: ${perfil.telefono}` : '';
+
+      if (clientTitle) clientTitle.textContent = `Cliente: ${nombre}`;
+      if (clientSub) clientSub.textContent = `${email}${tel}`;
+
+      // Si el modal de checkout estaba abierto en espera de login, actualizar su vista
+      if (modalCheckout && modalCheckout.classList.contains('active')) {
+        openCheckoutModal();
+      }
+
+      // Cargar pedidos reales de la persona
+      renderMisPedidos();
+    } else {
+      if (clientTitle) clientTitle.textContent = 'Área de Clientes';
+      if (clientSub) clientSub.textContent = 'Iniciá sesión para ver tus mascotas, turnos y pedidos en tiempo real.';
+      renderMisPedidos();
+    }
+  });
+
+  // ==========================================
+  // TURNOS Y MASCOTAS (Módulo en transición / Fase 3)
   // ==========================================
   const modalBooking = document.getElementById('modalBooking');
   const bookingForm = document.getElementById('bookingForm');
+  const modalAddPet = document.getElementById('modalAddPet');
+  const btnAddNewPet = document.getElementById('btnAddNewPet');
+  const addPetForm = document.getElementById('addPetForm');
+  const btnHeroReserve = document.getElementById('btnHeroReserve');
+  const btnMainBooking = document.getElementById('btnMainBooking');
+  const btnPortalNewBooking = document.getElementById('btnPortalNewBooking');
 
   const openBookingModal = (preselectedServiceId = null) => {
-    // Establecer fecha mínima: hoy
     const dateInput = document.getElementById('bookingDate');
     const today = new Date().toISOString().split('T')[0];
     if (dateInput) {
@@ -427,27 +1172,35 @@ document.addEventListener('DOMContentLoaded', () => {
       if (select) select.value = preselectedServiceId;
     }
 
-    // Precargar datos del cliente activo para agilidad
-    const client = window.vetDB.getById('clientes', currentClientId);
-    if (client) {
-      document.getElementById('bookingClientName').value = client.nombre;
-      document.getElementById('bookingClientLastname').value = client.apellido;
-      document.getElementById('bookingClientEmail').value = client.email;
-      document.getElementById('bookingClientPhone').value = client.telefono || '';
+    // Precargar datos del cliente
+    const perfil = window.vetAuth ? window.vetAuth.obtenerPerfil() : null;
+    const session = window.vetAuth ? window.vetAuth.obtenerSesion() : null;
+
+    if (perfil) {
+      if (document.getElementById('bookingClientName')) document.getElementById('bookingClientName').value = perfil.nombre || '';
+      if (document.getElementById('bookingClientLastname')) document.getElementById('bookingClientLastname').value = perfil.apellido || '';
+      if (document.getElementById('bookingClientEmail')) document.getElementById('bookingClientEmail').value = perfil.email || '';
+      if (document.getElementById('bookingClientPhone')) document.getElementById('bookingClientPhone').value = perfil.telefono || '';
+    } else if (session?.user) {
+      if (document.getElementById('bookingClientEmail')) document.getElementById('bookingClientEmail').value = session.user.email || '';
+    } else if (window.vetDB) {
+      const demoClient = window.vetDB.getById('clientes', currentClientId);
+      if (demoClient) {
+        if (document.getElementById('bookingClientName')) document.getElementById('bookingClientName').value = demoClient.nombre;
+        if (document.getElementById('bookingClientLastname')) document.getElementById('bookingClientLastname').value = demoClient.apellido;
+        if (document.getElementById('bookingClientEmail')) document.getElementById('bookingClientEmail').value = demoClient.email;
+        if (document.getElementById('bookingClientPhone')) document.getElementById('bookingClientPhone').value = demoClient.telefono || '';
+      }
     }
 
     openModal(modalBooking);
   };
 
-  const btnHeroReserve = document.getElementById('btnHeroReserve');
-  const btnMainBooking = document.getElementById('btnMainBooking');
-  const btnPortalNewBooking = document.getElementById('btnPortalNewBooking');
-
   if (btnHeroReserve) btnHeroReserve.addEventListener('click', () => openBookingModal());
   if (btnMainBooking) btnMainBooking.addEventListener('click', () => openBookingModal());
   if (btnPortalNewBooking) btnPortalNewBooking.addEventListener('click', () => openBookingModal());
 
-  if (bookingForm) {
+  if (bookingForm && window.vetDB) {
     bookingForm.addEventListener('submit', (e) => {
       e.preventDefault();
 
@@ -466,7 +1219,6 @@ document.addEventListener('DOMContentLoaded', () => {
       const clientEmail = document.getElementById('bookingClientEmail').value.trim();
       const clientPhone = document.getElementById('bookingClientPhone').value.trim();
 
-      // 1. Obtener o crear cliente
       let client = window.vetDB.filter('clientes', c => c.email.toLowerCase() === clientEmail.toLowerCase())[0];
       if (!client) {
         client = window.vetDB.insert('clientes', {
@@ -475,11 +1227,10 @@ document.addEventListener('DOMContentLoaded', () => {
           email: clientEmail,
           telefono: clientPhone,
           direccion: 'A coordinar',
-          password_hash: 'auto_generated_token'
+          password_hash: 'auto_token'
         });
       }
 
-      // 2. Obtener o crear mascota para ese cliente
       let pet = window.vetDB.filter('mascotas', m => m.cliente_id === client.id && m.nombre.toLowerCase() === petName.toLowerCase())[0];
       if (!pet) {
         pet = window.vetDB.insert('mascotas', {
@@ -491,7 +1242,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
       }
 
-      // 3. Crear el turno
       const nuevoTurno = window.vetDB.insert('turnos', {
         cliente_id: client.id,
         mascota_id: pet.id,
@@ -503,23 +1253,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
       closeModal(modalBooking);
       bookingForm.reset();
-      renderPortalData();
-      refreshDbInspector();
-
+      renderPortalMascotasYTurnos();
       showToast(`¡Turno #${nuevoTurno.id} reservado con éxito para ${pet.nombre}!`, 'success');
     });
   }
 
-  // ==========================================
-  // REGISTRAR MASCOTA ADICIONAL (mascotas)
-  // ==========================================
-  const modalAddPet = document.getElementById('modalAddPet');
-  const btnAddNewPet = document.getElementById('btnAddNewPet');
-  const addPetForm = document.getElementById('addPetForm');
-
   if (btnAddNewPet) btnAddNewPet.addEventListener('click', () => openModal(modalAddPet));
 
-  if (addPetForm) {
+  if (addPetForm && window.vetDB) {
     addPetForm.addEventListener('submit', (e) => {
       e.preventDefault();
       const name = document.getElementById('newPetName').value.trim();
@@ -537,23 +1278,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
       closeModal(modalAddPet);
       addPetForm.reset();
-      renderPortalData();
-      refreshDbInspector();
-
+      renderPortalMascotasYTurnos();
       showToast(`Mascota "${newPet.nombre}" registrada correctamente.`, 'success');
     });
   }
 
-  // ==========================================
-  // RENDER: PORTAL CLIENTE (mascotas & turnos)
-  // ==========================================
-  const renderPortalData = () => {
+  const renderPortalMascotasYTurnos = () => {
+    if (!window.vetDB) return;
+
     const petsContainer = document.getElementById('petsListContainer');
     const appContainer = document.getElementById('appointmentsListContainer');
     const petBadge = document.getElementById('petCountBadge');
     const appBadge = document.getElementById('appointmentsCountBadge');
 
-    // Mascotas del cliente
+    // Mascotas
     const pets = window.vetDB.filter('mascotas', m => m.cliente_id === currentClientId);
     if (petBadge) petBadge.textContent = pets.length;
 
@@ -565,15 +1303,15 @@ document.addEventListener('DOMContentLoaded', () => {
           <div style="background: var(--slate-50); border: 1px solid var(--slate-200); border-radius: var(--radius-md); padding: 1.1rem; display: flex; align-items: flex-start; justify-content: space-between; gap: 0.75rem;">
             <div>
               <div style="font-weight: 700; font-size: 1.05rem; color: var(--slate-900);">
-                🐾 ${pet.nombre}
+                🐾 ${esc(pet.nombre)}
               </div>
               <div style="font-size: 0.82rem; color: var(--slate-600); margin: 0.2rem 0;">
-                <strong>Raza:</strong> ${pet.raza || 'Común'} | 
-                <strong>Nacimiento:</strong> ${pet.fecha_nacimiento ? pet.fecha_nacimiento : 'No especificado'}
+                <strong>Raza:</strong> ${esc(pet.raza || 'Común')} | 
+                <strong>Nacimiento:</strong> ${esc(pet.fecha_nacimiento || 'No especificado')}
               </div>
-              ${pet.notas ? `<div style="font-size: 0.8rem; color: var(--slate-500); margin-top: 0.35rem; background: #fff; padding: 0.4rem 0.6rem; border-radius: 6px; border: 1px dashed var(--slate-300);">📝 ${pet.notas}</div>` : ''}
+              ${pet.notas ? `<div style="font-size: 0.8rem; color: var(--slate-500); margin-top: 0.35rem; background: #fff; padding: 0.4rem 0.6rem; border-radius: 6px; border: 1px dashed var(--slate-300);">📝 ${esc(pet.notas)}</div>` : ''}
             </div>
-            <button class="btn btn-outline btn-sm btn-quick-book" data-pet-id="${pet.id}" data-pet-name="${pet.nombre}" style="font-size: 0.78rem; padding: 0.3rem 0.65rem;">
+            <button type="button" class="btn btn-outline btn-sm btn-quick-book" data-pet-name="${esc(pet.nombre)}" style="font-size: 0.78rem; padding: 0.3rem 0.65rem;">
               Pedir Turno
             </button>
           </div>
@@ -583,13 +1321,14 @@ document.addEventListener('DOMContentLoaded', () => {
           btn.addEventListener('click', () => {
             const petName = btn.getAttribute('data-pet-name');
             openBookingModal();
-            document.getElementById('bookingPetName').value = petName;
+            const petInput = document.getElementById('bookingPetName');
+            if (petInput) petInput.value = petName;
           });
         });
       }
     }
 
-    // Turnos del cliente
+    // Turnos
     const turnos = window.vetDB.getTurnosDetallados().filter(t => t.cliente_id === currentClientId);
     if (appBadge) appBadge.textContent = turnos.length;
 
@@ -600,21 +1339,21 @@ document.addEventListener('DOMContentLoaded', () => {
         appContainer.innerHTML = turnos.map(t => `
           <div style="background: var(--slate-50); border: 1px solid var(--slate-200); border-radius: var(--radius-md); padding: 1.1rem;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-              <span class="badge-status badge-${t.estado}">${t.estado}</span>
-              <span style="font-size: 0.78rem; color: var(--slate-500);">ID #${t.id}</span>
+              <span class="badge-status badge-${esc(t.estado)}">${esc(t.estado)}</span>
+              <span style="font-size: 0.78rem; color: var(--slate-500);">ID #${esc(t.id)}</span>
             </div>
             <div style="font-weight: 700; color: var(--slate-900); font-size: 0.95rem;">
-              ${t.servicio.nombre}
+              ${esc(t.servicio?.nombre || 'Servicio')}
             </div>
             <div style="font-size: 0.82rem; color: var(--slate-600); margin: 0.25rem 0;">
-              🐶 Paciente: <strong>${t.mascota.nombre}</strong> (${t.mascota.raza})
+              🐶 Paciente: <strong>${esc(t.mascota?.nombre || 'Mascota')}</strong> (${esc(t.mascota?.raza || 'Común')})
             </div>
             <div style="font-size: 0.85rem; font-weight: 600; color: var(--primary-700); margin-top: 0.4rem;">
               🗓️ ${formatDate(t.fecha_hora)}
             </div>
             ${t.estado !== 'cancelado' ? `
               <div style="display: flex; gap: 0.5rem; margin-top: 0.75rem; padding-top: 0.5rem; border-top: 1px solid var(--slate-200);">
-                <button class="btn btn-outline btn-sm btn-cancel-appointment" data-turno-id="${t.id}" style="font-size: 0.75rem; padding: 0.25rem 0.5rem; color: var(--danger);">
+                <button type="button" class="btn btn-outline btn-sm btn-cancel-appointment" data-turno-id="${esc(t.id)}" style="font-size: 0.75rem; padding: 0.25rem 0.5rem; color: var(--danger);">
                   Cancelar turno
                 </button>
               </div>
@@ -626,8 +1365,7 @@ document.addEventListener('DOMContentLoaded', () => {
           btn.addEventListener('click', () => {
             const tId = Number(btn.getAttribute('data-turno-id'));
             window.vetDB.update('turnos', tId, { estado: 'cancelado' });
-            renderPortalData();
-            refreshDbInspector();
+            renderPortalMascotasYTurnos();
             showToast(`Turno #${tId} cancelado.`, 'info');
           });
         });
@@ -636,93 +1374,7 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   // ==========================================
-  // EXPLORADOR Y VISOR DE BASE DE DATOS
-  // ==========================================
-  const modalDbInspector = document.getElementById('modalDbInspector');
-  const btnOpenDbInspector = document.getElementById('btnOpenDbInspector');
-  const btnFooterDb = document.getElementById('btnFooterDb');
-  const btnResetDb = document.getElementById('btnResetDb');
-  const dbTableView = document.getElementById('dbTableView');
-  const dbTableInfo = document.getElementById('dbTableInfo');
-
-  if (btnOpenDbInspector) {
-    btnOpenDbInspector.addEventListener('click', () => {
-      refreshDbInspector();
-      openModal(modalDbInspector);
-    });
-  }
-  if (btnFooterDb) {
-    btnFooterDb.addEventListener('click', (e) => {
-      e.preventDefault();
-      refreshDbInspector();
-      openModal(modalDbInspector);
-    });
-  }
-
-  if (btnResetDb) {
-    btnResetDb.addEventListener('click', () => {
-      if (confirm('¿Deseas restaurar la base de datos a los valores iniciales de demostración?')) {
-        window.vetDB.reset();
-        renderServices();
-        renderCategories();
-        renderProducts();
-        renderPortalData();
-        refreshDbInspector();
-        showToast('Base de datos restaurada con éxito.', 'info');
-      }
-    });
-  }
-
-  // Cambio de pestañas en el inspector de base de datos
-  document.querySelectorAll('.db-tab-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('.db-tab-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      activeDbTable = btn.getAttribute('data-table');
-      refreshDbInspector();
-    });
-  });
-
-  const refreshDbInspector = () => {
-    if (!dbTableView) return;
-    const records = window.vetDB.getAll(activeDbTable);
-    if (dbTableInfo) {
-      dbTableInfo.textContent = `Tabla: ${activeDbTable} (${records.length} registros)`;
-    }
-
-    if (records.length === 0) {
-      dbTableView.innerHTML = `<tr><td style="padding: 2rem; text-align: center; color: var(--slate-400);">Sin registros en la tabla '${activeDbTable}'</td></tr>`;
-      return;
-    }
-
-    // Encabezados basados en las llaves del primer registro
-    const headers = Object.keys(records[0]);
-    let thead = '<thead><tr>' + headers.map(h => `<th>${h}</th>`).join('') + '</tr></thead>';
-
-    let tbody = '<tbody>' + records.map(row => {
-      return '<tr>' + headers.map(key => {
-        let val = row[key];
-        if (key === 'estado') {
-          return `<td><span class="badge-status badge-${val}">${val}</span></td>`;
-        }
-        if (key === 'precio' || key === 'precio_unitario' || key === 'total') {
-          return `<td><strong>${formatCurrency(val)}</strong></td>`;
-        }
-        if (key.includes('fecha') || key === 'creado_en') {
-          return `<td style="font-size: 0.78rem; color: var(--slate-500);">${formatDate(val)}</td>`;
-        }
-        if (typeof val === 'boolean') {
-          return `<td>${val ? '✅ Sí' : '❌ No'}</td>`;
-        }
-        return `<td>${val !== null && val !== undefined ? String(val) : '<em style="color:#aaa;">null</em>'}</td>`;
-      }).join('') + '</tr>';
-    }).join('') + '</tbody>';
-
-    dbTableView.innerHTML = thead + tbody;
-  };
-
-  // ==========================================
-  // HELPERS MODAL
+  // HELPERS DE MODALES
   // ==========================================
   const openModal = (modalEl) => {
     if (modalEl) modalEl.classList.add('active');
@@ -742,7 +1394,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // Cerrar al hacer clic fuera del modal
   document.querySelectorAll('.modal-overlay').forEach(overlay => {
     overlay.addEventListener('click', (e) => {
       if (e.target === overlay) closeModal(overlay);
@@ -750,11 +1401,21 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // ==========================================
-  // INICIALIZACIÓN DE LA PÁGINA
+  // INICIALIZACIÓN DE LA APLICACIÓN
   // ==========================================
-  renderServices();
-  renderCategories();
-  renderProducts();
-  renderPortalData();
+  // 1. Cargar carrito desde localStorage
+  cart = loadCartFromStorage();
   updateCartUI();
+
+  // 2. Cargar servicios veterinarios desde Supabase
+  renderServices();
+
+  // 3. Cargar catálogo de categorías y productos desde Supabase
+  loadCatalog();
+
+  // 4. Cargar portal inicial
+  renderPortalMascotasYTurnos();
+
+  // 5. Verificar parámetros de retorno de Mercado Pago
+  verificarRetornoMercadoPago();
 });

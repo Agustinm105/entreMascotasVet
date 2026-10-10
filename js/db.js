@@ -1,7 +1,14 @@
 /**
- * Veterinaria Entre Mascotas - Gestor de Base de Datos Local
- * Modela fielmente el esquema relacional SQL proporcionado.
- * Persiste en localStorage para permitir pruebas interactivas en vivo.
+ * Veterinaria Entre Mascotas - Gestor de Base de Datos Local (Fase de Transición)
+ * 
+ * NOTA DE MIGRACIÓN (FASE 2):
+ * - Categorías, Productos y Servicios ahora se leen desde Supabase vía js/api.js.
+ * - Carrito, Pedidos, Detalle de pedidos y Checkout ahora interactúan con Supabase vía js/api.js y RPCs.
+ * 
+ * PENDIENTE PARA FASE 3:
+ * - Turnos (tabla pública 'turnos' y RPCs de disponibilidad/cancelación en Supabase).
+ * - Mascotas (tabla pública 'mascotas' asociadas al cliente_id uuid de 'perfiles').
+ * - Ficha de cliente local y reserva rápida en portal se migrarán a Supabase en la siguiente fase.
  */
 
 const DB_KEY = 'entre_mascotas_db_v1';
