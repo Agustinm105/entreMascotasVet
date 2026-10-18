@@ -28,8 +28,8 @@ entreMascotasVet/
 │   ├── config.js          # Configuración pública del frontend (Supabase URL y Key)
 │   ├── supabase-client.js # Inicialización y exposición del cliente Supabase (window.sb)
 │   ├── auth.js            # Autenticación con Google, perfiles y roles (window.vetAuth)
-│   ├── db.js              # Base de datos local en transición (localStorage)
-│   └── app.js             # Lógica interactiva principal del sitio
+│   ├── api.js             # Capa de datos con Supabase (window.vetApi)
+│   └── app.js             # Lógica interactiva principal del sitio (Catálogo, Portal, Turnos)
 │
 ├── admin/                 # Panel de administración dedicado (Backoffice con roles staff y admin)
 ├── index.html             # Página principal completa y responsiva
@@ -73,7 +73,8 @@ Podés ingresar en tu navegador en:
 
 El proyecto evoluciona en fases ordenadas hacia una arquitectura 100% cloud:
 
-1. **Fase 1 (Actual) - Conexión y Autenticación con Google**: Integración de `@supabase/supabase-js`, `config.js`, `supabase-client.js`, autenticación OAuth con Google, carga de perfiles y menú interactivo de usuario.
-2. **Fase 2 - Migración de Datos y Catálogo**: Reemplazo definitivo de `js/db.js` por consultas en tiempo real a Supabase para turnos, productos, mascotas y pedidos.
-3. **Fase 3 - Panel de Administración (`admin/`)**: Backoffice seguro con diseño independiente para gestión de turnos, inventario, clientes y métricas según el rol (`empleado` / `admin`).
-4. **Fase 4 - Pasarela de Pagos con Mercado Pago**: Integración de Checkout Pro mediante Supabase Edge Functions (`crear-pago` y `mp-webhook`) para cobro automático y actualización de estados.
+1. ✅ **Fase 1 - Conexión y Autenticación con Google**: Integración de `@supabase/supabase-js`, `config.js`, `supabase-client.js`, autenticación OAuth con Google, carga de perfiles y menú interactivo de usuario.
+2. ✅ **Fase 2 - Tienda, Catálogo y Checkout**: Catálogo dinámico desde Supabase (`categorias`, `productos`, `servicios`), carrito en tiempo real, creación transaccional de pedidos y `detalle_pedido`.
+3. ✅ **Fase 3 - Portal del Cliente, Mascotas y Turnos**: Gestión de perfil personal, fichas de mascotas (con fotos en Storage) y agendamiento de citas veterinarias.
+4. ✅ **Fase 4 - Panel de Administración (`admin/`)**: Backoffice profesional y responsive con control de acceso por roles (`admin` vs `empleado`), métricas comerciales (`estadisticas_ventas` RPC, gráfico SVG), gestión de pedidos (con cambio de estado, devolución de stock e impresión de hojas de envío), agenda de turnos, catálogo e inventario en línea, categorías, servicios, clientes 360°, fichas clínicas de mascotas y gestión de equipo.
+5. 🔜 **Fase 5 - Pasarela de Pagos con Mercado Pago**: Integración de Checkout Pro mediante Supabase Edge Functions (`crear-pago` y `mp-webhook`) para cobro automático y actualización de estados.

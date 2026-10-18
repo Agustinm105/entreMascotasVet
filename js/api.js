@@ -30,6 +30,10 @@
   const vetApi = {
     esc,
 
+    // ==========================================
+    // 1. TIENDA Y CATÁLOGO
+    // ==========================================
+
     /**
      * Obtiene la lista completa de categorías.
      */
@@ -72,7 +76,7 @@
 
     /**
      * Obtiene los servicios veterinarios activos.
-     * Nota: columna servicios.imagen_url (reemplaza a servicios.imagen de la demo).
+     * Nota: columna servicios.imagen_url.
      */
     async getServicios() {
       try {
@@ -112,6 +116,318 @@
         return { data: null, error };
       }
     },
+
+    // ==========================================
+    // 2. PERFIL DE USUARIO
+    // ==========================================
+
+    /**
+     * Obtiene el perfil de un usuario por id.
+     */
+    async getPerfil(userId) {
+      try {
+        assertClient();
+        const { data, error } = await window.sb
+          .from('perfiles')
+          .select('*')
+          .eq('id', userId)
+          .maybeSingle();
+
+        if (error) throw error;
+        return { data, error: null };
+      } catch (error) {
+        console.error('[vetApi.getPerfil] Error al obtener perfil:', error);
+        return { data: null, error };
+      }
+    },
+
+    /**
+     * Actualiza datos de perfil (nombre, apellido, teléfono, dirección).
+     * No modifica el rol.
+     */
+    async actualizarPerfil(userId, updates) {
+      try {
+        assertClient();
+        // Filtrar estrictamente solo los campos permitidos para clientes
+        const payload = {};
+        if (updates.nombre !== undefined) payload.nombre = updates.nombre ? String(updates.nombre).trim() : null;
+        if (updates.apellido !== undefined) payload.apellido = updates.apellido ? String(updates.apellido).trim() : null;
+        if (updates.telefono !== undefined) payload.telefono = updates.telefono ? String(updates.telefono).trim() : null;
+        if (updates.direccion !== undefined) payload.direccion = updates.direccion ? String(updates.direccion).trim() : null;
+
+        const { data, error } = await window.sb
+          .from('perfiles')
+          .update(payload)
+          .eq('id', userId)
+          .select()
+          .maybeSingle();
+
+        if (error) throw error;
+        return { data, error: null };
+      } catch (error) {
+        console.error('[vetApi.actualizarPerfil] Error al actualizar perfil:', error);
+        return { data: null, error };
+      }
+    },
+
+    // ==========================================
+    // 3. FICHAS DE MASCOTAS
+    // ==========================================
+
+    /**
+     * Lista todas las mascotas del usuario autenticado.
+     */
+    async getMisMascotas() {
+      try {
+        assertClient();
+        const { data, error } = await window.sb
+          .from('mascotas')
+          .select('*')
+          .order('id', { ascending: true });
+
+        if (error) throw error;
+        return { data: data || [], error: null };
+      } catch (error) {
+        console.error('[vetApi.getMisMascotas] Error al obtener mascotas:', error);
+        return { data: null, error };
+      }
+    },
+
+    /**
+     * Crea una nueva ficha de mascota asociada al cliente autenticado.
+     * @param {Object} mascotaData
+     */
+    async crearMascota(mascotaData) {
+      try {
+        assertClient();
+        const user = window.vetAuth?.session?.user;
+        if (!user) throw new Error('Tenés que iniciar sesión para registrar una mascota.');
+
+        const payload = {
+          cliente_id: user.id,
+          nombre: String(mascotaData.nombre || '').trim(),
+          especie: mascotaData.especie,
+          raza: mascotaData.raza ? String(mascotaData.raza).trim() : null,
+          sexo: mascotaData.sexo || null,
+          fecha_nacimiento: mascotaData.fecha_nacimiento || null,
+          peso_kg: mascotaData.peso_kg ? Number(mascotaData.peso_kg) : null,
+          castrado: mascotaData.castrado === true ? true : (mascotaData.castrado === false ? false : null),
+          notas: mascotaData.notas ? String(mascotaData.notas).trim() : null
+        };
+
+        if (!payload.nombre) throw new Error('El nombre de la mascota es obligatorio.');
+        if (!payload.especie || !['perro', 'gato', 'otro'].includes(payload.especie)) {
+          throw new Error('La especie es obligatoria (perro, gato u otro).');
+        }
+
+        const { data, error } = await window.sb
+          .from('mascotas')
+          .insert(payload)
+          .select()
+          .single();
+
+        if (error) throw error;
+        return { data, error: null };
+      } catch (error) {
+        console.error('[vetApi.crearMascota] Error al crear mascota:', error);
+        return { data: null, error };
+      }
+    },
+
+    /**
+     * Actualiza la ficha de una mascota existente.
+     * @param {number|string} mascotaId
+     * @param {Object} mascotaData
+     */
+    async actualizarMascota(mascotaId, mascotaData) {
+      try {
+        assertClient();
+        const payload = {
+          nombre: String(mascotaData.nombre || '').trim(),
+          especie: mascotaData.especie,
+          raza: mascotaData.raza ? String(mascotaData.raza).trim() : null,
+          sexo: mascotaData.sexo || null,
+          fecha_nacimiento: mascotaData.fecha_nacimiento || null,
+          peso_kg: mascotaData.peso_kg ? Number(mascotaData.peso_kg) : null,
+          castrado: mascotaData.castrado === true ? true : (mascotaData.castrado === false ? false : null),
+          notas: mascotaData.notas ? String(mascotaData.notas).trim() : null
+        };
+
+        if (!payload.nombre) throw new Error('El nombre de la mascota es obligatorio.');
+        if (!payload.especie || !['perro', 'gato', 'otro'].includes(payload.especie)) {
+          throw new Error('La especie es obligatoria (perro, gato u otro).');
+        }
+
+        const { data, error } = await window.sb
+          .from('mascotas')
+          .update(payload)
+          .eq('id', mascotaId)
+          .select()
+          .single();
+
+        if (error) throw error;
+        return { data, error: null };
+      } catch (error) {
+        console.error('[vetApi.actualizarMascota] Error al actualizar mascota:', error);
+        return { data: null, error };
+      }
+    },
+
+    /**
+     * Elimina una mascota. Si tiene turnos asociados, la base rechaza el borrado.
+     * @param {number|string} mascotaId
+     */
+    async eliminarMascota(mascotaId) {
+      try {
+        assertClient();
+        const { error } = await window.sb
+          .from('mascotas')
+          .delete()
+          .eq('id', mascotaId);
+
+        if (error) {
+          // Error 23503 en Postgres = foreign_key_violation (turnos asociados)
+          if (error.code === '23503' || String(error.message).includes('foreign key') || String(error.message).includes('turnos')) {
+            throw new Error('No se puede eliminar porque tiene turnos asociados');
+          }
+          throw error;
+        }
+
+        return { success: true, error: null };
+      } catch (error) {
+        console.error('[vetApi.eliminarMascota] Error al eliminar mascota:', error);
+        return { success: false, error };
+      }
+    },
+
+    // ==========================================
+    // 4. TURNOS VETERINARIOS
+    // ==========================================
+
+    /**
+     * Horarios tomados para un servicio en una fecha específica (vía RPC horarios_ocupados).
+     * @param {number|string} servicioId
+     * @param {string} fecha YYYY-MM-DD
+     */
+    async getHorariosOcupados(servicioId, fecha) {
+      try {
+        assertClient();
+        const { data, error } = await window.sb.rpc('horarios_ocupados', {
+          p_servicio: Number(servicioId),
+          p_fecha: fecha
+        });
+
+        if (error) throw error;
+        return { data: data || [], error: null };
+      } catch (error) {
+        console.error('[vetApi.getHorariosOcupados] Error al consultar horarios ocupados:', error);
+        return { data: [], error };
+      }
+    },
+
+    /**
+     * Lista los turnos de la persona autenticada con su servicio y mascota.
+     */
+    async getMisTurnos() {
+      try {
+        assertClient();
+        const { data, error } = await window.sb
+          .from('turnos')
+          .select(`
+            id,
+            cliente_id,
+            mascota_id,
+            servicio_id,
+            fecha_hora,
+            estado,
+            notas,
+            creado_en,
+            mascotas (
+              id,
+              nombre,
+              especie,
+              raza
+            ),
+            servicios (
+              id,
+              nombre,
+              icono,
+              duracion_min,
+              precio
+            )
+          `)
+          .order('fecha_hora', { ascending: true });
+
+        if (error) throw error;
+        return { data: data || [], error: null };
+      } catch (error) {
+        console.error('[vetApi.getMisTurnos] Error al obtener turnos:', error);
+        return { data: null, error };
+      }
+    },
+
+    /**
+     * Reserva un turno veterinario.
+     * fecha_hora debe venir como ISO con offset -03:00 (ej: 2026-10-15T10:00:00-03:00).
+     */
+    async crearTurno({ mascotaId, servicioId, fechaHora, notas }) {
+      try {
+        assertClient();
+        const user = window.vetAuth?.session?.user;
+        if (!user) throw new Error('Tenés que iniciar sesión para reservar un turno.');
+
+        const payload = {
+          cliente_id: user.id,
+          mascota_id: Number(mascotaId),
+          servicio_id: Number(servicioId),
+          fecha_hora: fechaHora,
+          estado: 'reservado',
+          notas: notas ? String(notas).trim() : null
+        };
+
+        const { data, error } = await window.sb
+          .from('turnos')
+          .insert(payload)
+          .select()
+          .single();
+
+        if (error) {
+          // 23505 = unique_violation (índice turnos_horario_unico)
+          if (error.code === '23505' || String(error.message).includes('turnos_horario_unico')) {
+            throw new Error('Ese horario se acaba de ocupar, elegí otro');
+          }
+          throw error;
+        }
+
+        return { data, error: null };
+      } catch (error) {
+        console.error('[vetApi.crearTurno] Error al reservar turno:', error);
+        return { data: null, error };
+      }
+    },
+
+    /**
+     * Cancela un turno del cliente mediante RPC cancelar_turno.
+     * Solo permitido si está en estado 'reservado' o 'confirmado'.
+     */
+    async cancelarTurno(turnoId) {
+      try {
+        assertClient();
+        const { data, error } = await window.sb.rpc('cancelar_turno', {
+          p_id: Number(turnoId)
+        });
+
+        if (error) throw error;
+        return { data, error: null };
+      } catch (error) {
+        console.error('[vetApi.cancelarTurno] Error al cancelar turno:', error);
+        return { data: null, error };
+      }
+    },
+
+    // ==========================================
+    // 5. PEDIDOS Y CHECKOUT (Fase 2)
+    // ==========================================
 
     /**
      * Crea un pedido real mediante la función segura de Postgres crear_pedido.
@@ -239,27 +555,6 @@
         return { data, error: null };
       } catch (error) {
         console.error('[vetApi.getPedidoPorId] Error al consultar pedido:', error);
-        return { data: null, error };
-      }
-    },
-
-    /**
-     * Actualiza datos de contacto o dirección en el perfil de la persona autenticada.
-     */
-    async actualizarPerfil(userId, updates) {
-      try {
-        assertClient();
-        const { data, error } = await window.sb
-          .from('perfiles')
-          .update(updates)
-          .eq('id', userId)
-          .select()
-          .maybeSingle();
-
-        if (error) throw error;
-        return { data, error: null };
-      } catch (error) {
-        console.error('[vetApi.actualizarPerfil] Error al actualizar perfil:', error);
         return { data: null, error };
       }
     }

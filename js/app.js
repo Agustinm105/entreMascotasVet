@@ -31,8 +31,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const CART_STORAGE_KEY = 'entre_mascotas_cart';
   let cart = []; // Array<{ producto_id: number|string, cantidad: number }>
 
-  // ID del cliente local para turnos y mascotas (fase de transición / Phase 3)
-  const currentClientId = 1;
 
   // ==========================================
   // FORMATEADORES (docs/CONTEXTO.md - Regla 4)
@@ -802,54 +800,52 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ==========================================
-  // PORTAL CLIENTE: PESTAÑAS & MIS PEDIDOS
+  // PESTAÑAS DEL PORTAL CLIENTE (#portal - Fase 3)
+  // Pestañas: 'datos', 'mascotas', 'turnos', 'pedidos'
   // ==========================================
-  const tabBtnMascotasTurnos = document.getElementById('tabBtnMascotasTurnos');
-  const tabBtnMisPedidos = document.getElementById('tabBtnMisPedidos');
-  const tabContentMascotasTurnos = document.getElementById('tabContentMascotasTurnos');
-  const tabContentMisPedidos = document.getElementById('tabContentMisPedidos');
+  let currentPortalTab = 'datos';
 
-  const activarTabPortal = (tab) => {
-    if (tab === 'pedidos') {
-      if (tabContentMascotasTurnos) tabContentMascotasTurnos.style.display = 'none';
-      if (tabContentMisPedidos) tabContentMisPedidos.style.display = 'block';
+  const activarTabPortal = (tabKey) => {
+    currentPortalTab = tabKey;
 
-      if (tabBtnMascotasTurnos) {
-        tabBtnMascotasTurnos.classList.remove('active');
-        tabBtnMascotasTurnos.style.borderBottomColor = 'transparent';
-        tabBtnMascotasTurnos.style.color = 'var(--slate-500)';
-      }
-      if (tabBtnMisPedidos) {
-        tabBtnMisPedidos.classList.add('active');
-        tabBtnMisPedidos.style.borderBottomColor = 'var(--primary-600)';
-        tabBtnMisPedidos.style.color = 'var(--primary-700)';
-      }
-    } else {
-      if (tabContentMascotasTurnos) tabContentMascotasTurnos.style.display = 'block';
-      if (tabContentMisPedidos) tabContentMisPedidos.style.display = 'none';
+    // Alternar botones
+    document.querySelectorAll('.portal-tab-btn').forEach(btn => {
+      const isTarget = btn.getAttribute('data-portal-tab') === tabKey;
+      btn.classList.toggle('active', isTarget);
+    });
 
-      if (tabBtnMascotasTurnos) {
-        tabBtnMascotasTurnos.classList.add('active');
-        tabBtnMascotasTurnos.style.borderBottomColor = 'var(--primary-600)';
-        tabBtnMascotasTurnos.style.color = 'var(--primary-700)';
+    // Alternar paneles
+    const panes = {
+      datos: document.getElementById('tabPortalDatos'),
+      mascotas: document.getElementById('tabPortalMascotas'),
+      turnos: document.getElementById('tabPortalTurnos'),
+      pedidos: document.getElementById('tabPortalPedidos')
+    };
+
+    Object.entries(panes).forEach(([k, pane]) => {
+      if (pane) {
+        pane.classList.toggle('active', k === tabKey);
       }
-      if (tabBtnMisPedidos) {
-        tabBtnMisPedidos.classList.remove('active');
-        tabBtnMisPedidos.style.borderBottomColor = 'transparent';
-        tabBtnMisPedidos.style.color = 'var(--slate-500)';
-      }
+    });
+
+    // Cargar contenido según pestaña
+    if (tabKey === 'datos') {
+      if (typeof renderPortalDatos === 'function') renderPortalDatos();
+    } else if (tabKey === 'mascotas') {
+      if (typeof renderPortalMascotas === 'function') renderPortalMascotas();
+    } else if (tabKey === 'turnos') {
+      if (typeof renderPortalTurnos === 'function') renderPortalTurnos();
+    } else if (tabKey === 'pedidos') {
+      if (typeof renderMisPedidos === 'function') renderMisPedidos();
     }
   };
 
-  if (tabBtnMascotasTurnos) {
-    tabBtnMascotasTurnos.addEventListener('click', () => activarTabPortal('mascotas'));
-  }
-  if (tabBtnMisPedidos) {
-    tabBtnMisPedidos.addEventListener('click', () => {
-      activarTabPortal('pedidos');
-      renderMisPedidos();
+  document.querySelectorAll('.portal-tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const tabKey = btn.getAttribute('data-portal-tab');
+      if (tabKey) activarTabPortal(tabKey);
     });
-  }
+  });
 
   // Renderizar la lista de pedidos del usuario autenticado
   const renderMisPedidos = async () => {
@@ -1114,264 +1110,1128 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   // ==========================================
-  // SINCRONIZACIÓN CON EVENTOS DE AUTENTICACIÓN
+  // CONFIGURACIÓN DE HORARIOS DE ATENCIÓN (Fase 3)
+  // Turnos cada 30 min, finalizan antes del cierre según duración del servicio
   // ==========================================
-  document.addEventListener('vet:authchange', async (e) => {
-    const { session, perfil } = e.detail || {};
+  const HORARIOS_CONFIG = {
+    slotMinutes: 30,
+    maxDiasFuturo: 60,
+    dias: {
+      0: null, // Domingo cerrado
+      1: { inicio: '09:00', fin: '18:00' }, // Lunes
+      2: { inicio: '09:00', fin: '18:00' }, // Martes
+      3: { inicio: '09:00', fin: '18:00' }, // Miércoles
+      4: { inicio: '09:00', fin: '18:00' }, // Jueves
+      5: { inicio: '09:00', fin: '18:00' }, // Viernes
+      6: { inicio: '09:00', fin: '13:00' }  // Sábado
+    }
+  };
 
+  // Helper: cálculo de edad para mascotas (ej: "2 años y 3 meses")
+  const calcularEdad = (fechaNacimiento) => {
+    if (!fechaNacimiento) return 'Edad no indicada';
+    try {
+      const parts = fechaNacimiento.split('-');
+      if (parts.length !== 3) return 'Edad no indicada';
+      const birth = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+      const now = new Date();
+      if (isNaN(birth.getTime()) || birth > now) return 'Recién nacido';
+
+      let years = now.getFullYear() - birth.getFullYear();
+      let months = now.getMonth() - birth.getMonth();
+      let days = now.getDate() - birth.getDate();
+
+      if (days < 0) {
+        months -= 1;
+      }
+      if (months < 0) {
+        years -= 1;
+        months += 12;
+      }
+
+      if (years > 0) {
+        if (months > 0) {
+          const yStr = years === 1 ? '1 año' : `${years} años`;
+          const mStr = months === 1 ? '1 mes' : `${months} meses`;
+          return `${yStr} y ${mStr}`;
+        }
+        return years === 1 ? '1 año' : `${years} años`;
+      } else if (months > 0) {
+        return months === 1 ? '1 mes' : `${months} meses`;
+      } else {
+        return 'Menos de 1 mes';
+      }
+    } catch {
+      return 'Edad no indicada';
+    }
+  };
+
+  // Helpers de fecha en horario de Argentina (UTC-3)
+  const getHoyArgentina = () => {
+    const d = new Date();
+    const formatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Argentina/Buenos_Aires',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    });
+    return formatter.format(d); // "YYYY-MM-DD"
+  };
+
+  const getMaxFechaArgentina = () => {
+    const d = new Date();
+    d.setDate(d.getDate() + HORARIOS_CONFIG.maxDiasFuturo);
+    const formatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Argentina/Buenos_Aires',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    });
+    return formatter.format(d);
+  };
+
+  const getMinutosActualesArgentina = () => {
+    const d = new Date();
+    const formatter = new Intl.DateTimeFormat('es-AR', {
+      timeZone: 'America/Argentina/Buenos_Aires',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    });
+    const [h, m] = formatter.format(d).split(':').map(Number);
+    return (h * 60) + m;
+  };
+
+  // Caches locales para optimizar re-renders en el portal
+  let cacheMisMascotas = [];
+  let cacheMisTurnos = [];
+
+  // Control de visibilidad del portal según sesión
+  const actualizarPortalSegunAuth = async () => {
+    const portalUnauth = document.getElementById('portalUnauthenticated');
+    const portalAuth = document.getElementById('portalAuthenticated');
+    const session = window.vetAuth ? window.vetAuth.obtenerSesion() : null;
+    const perfil = window.vetAuth ? window.vetAuth.obtenerPerfil() : null;
+
+    if (!session || !session.user) {
+      if (portalUnauth) portalUnauth.style.display = 'block';
+      if (portalAuth) portalAuth.style.display = 'none';
+      return;
+    }
+
+    if (portalUnauth) portalUnauth.style.display = 'none';
+    if (portalAuth) portalAuth.style.display = 'block';
+
+    // Actualizar encabezado del portal con nombre y correo
     const clientTitle = document.getElementById('currentClientTitle');
     const clientSub = document.getElementById('currentClientSub');
 
-    if (session && session.user) {
-      let nombre = perfil?.nombre ? (perfil.nombre + (perfil.apellido ? ' ' + perfil.apellido : '')) : '';
-      if (!nombre) {
-        nombre = session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'Cliente';
-      }
-      const email = perfil?.email || session.user.email || '';
-      const tel = perfil?.telefono ? ` | Tel: ${perfil.telefono}` : '';
-
-      if (clientTitle) clientTitle.textContent = `Cliente: ${nombre}`;
-      if (clientSub) clientSub.textContent = `${email}${tel}`;
-
-      // Si el modal de checkout estaba abierto en espera de login, actualizar su vista
-      if (modalCheckout && modalCheckout.classList.contains('active')) {
-        openCheckoutModal();
-      }
-
-      // Cargar pedidos reales de la persona
-      renderMisPedidos();
-    } else {
-      if (clientTitle) clientTitle.textContent = 'Área de Clientes';
-      if (clientSub) clientSub.textContent = 'Iniciá sesión para ver tus mascotas, turnos y pedidos en tiempo real.';
-      renderMisPedidos();
+    let nombre = perfil?.nombre ? (perfil.nombre + (perfil.apellido ? ' ' + perfil.apellido : '')) : '';
+    if (!nombre) {
+      nombre = session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'Cliente';
     }
+    const email = perfil?.email || session.user.email || '';
+    const tel = perfil?.telefono ? ` | Tel: ${perfil.telefono}` : '';
+
+    if (clientTitle) clientTitle.textContent = `Cliente: ${nombre}`;
+    if (clientSub) clientSub.textContent = `${email}${tel}`;
+
+    actualizarAlertaDatosIncompletos(perfil);
+    activarTabPortal(currentPortalTab);
+    actualizarContadoresPortal();
+  };
+
+  const actualizarAlertaDatosIncompletos = (perfil) => {
+    const alertEl = document.getElementById('datosIncompleteAlert');
+    if (!alertEl) return;
+    const faltaTel = !perfil?.telefono || !perfil.telefono.trim();
+    const faltaDir = !perfil?.direccion || !perfil.direccion.trim();
+    alertEl.style.display = (faltaTel || faltaDir) ? 'flex' : 'none';
+  };
+
+  const actualizarContadoresPortal = async () => {
+    const session = window.vetAuth ? window.vetAuth.obtenerSesion() : null;
+    if (!session || !session.user) return;
+
+    try {
+      const [mascotasRes, turnosRes, pedidosRes] = await Promise.all([
+        window.vetApi.getMisMascotas(),
+        window.vetApi.getMisTurnos(),
+        window.vetApi.getMisPedidos()
+      ]);
+
+      const petsCount = document.getElementById('portalPetsCount');
+      if (petsCount && mascotasRes.data) petsCount.textContent = mascotasRes.data.length;
+
+      const turnosCount = document.getElementById('portalAppointmentsCount');
+      if (turnosCount && turnosRes.data) turnosCount.textContent = turnosRes.data.length;
+
+      const ordersCount = document.getElementById('portalOrdersCount');
+      if (ordersCount && pedidosRes.data) ordersCount.textContent = pedidosRes.data.length;
+    } catch (e) {
+      console.warn('[actualizarContadoresPortal] Error:', e);
+    }
+  };
+
+  // Botón de login desde la tarjeta unauthenticated del portal
+  const btnPortalGoogleLogin = document.getElementById('btnPortalGoogleLogin');
+  if (btnPortalGoogleLogin) {
+    btnPortalGoogleLogin.addEventListener('click', () => {
+      window.vetAuth?.loginConGoogle();
+    });
+  }
+
+  // ==========================================
+  // SECCIÓN 2: MIS DATOS (perfiles)
+  // ==========================================
+  const renderPortalDatos = () => {
+    const perfil = window.vetAuth ? window.vetAuth.obtenerPerfil() : null;
+    const session = window.vetAuth ? window.vetAuth.obtenerSesion() : null;
+
+    const inputNombre = document.getElementById('profileNombre');
+    const inputApellido = document.getElementById('profileApellido');
+    const inputTelefono = document.getElementById('profileTelefono');
+    const inputEmail = document.getElementById('profileEmail');
+    const inputDireccion = document.getElementById('profileDireccion');
+
+    if (inputEmail) {
+      inputEmail.value = perfil?.email || session?.user?.email || '';
+    }
+    if (inputNombre) {
+      inputNombre.value = perfil?.nombre || '';
+    }
+    if (inputApellido) {
+      inputApellido.value = perfil?.apellido || '';
+    }
+    if (inputTelefono) {
+      inputTelefono.value = perfil?.telefono || '';
+    }
+    if (inputDireccion) {
+      inputDireccion.value = perfil?.direccion || '';
+    }
+
+    actualizarAlertaDatosIncompletos(perfil);
+  };
+
+  const profileForm = document.getElementById('profileForm');
+  if (profileForm) {
+    profileForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const session = window.vetAuth ? window.vetAuth.obtenerSesion() : null;
+      if (!session || !session.user) {
+        showToast('Debés iniciar sesión para actualizar tus datos.', 'warning');
+        return;
+      }
+
+      const btnSubmit = document.getElementById('btnSaveProfile');
+      if (btnSubmit) {
+        btnSubmit.disabled = true;
+        btnSubmit.textContent = '💾 Guardando...';
+      }
+
+      const updates = {
+        nombre: document.getElementById('profileNombre')?.value.trim() || null,
+        apellido: document.getElementById('profileApellido')?.value.trim() || null,
+        telefono: document.getElementById('profileTelefono')?.value.trim() || null,
+        direccion: document.getElementById('profileDireccion')?.value.trim() || null
+      };
+
+      const { data: updated, error } = await window.vetApi.actualizarPerfil(session.user.id, updates);
+
+      if (btnSubmit) {
+        btnSubmit.disabled = false;
+        btnSubmit.textContent = '💾 Guardar Cambios';
+      }
+
+      if (error) {
+        showToast('No se pudieron actualizar los datos: ' + (error.message || 'Error desconocido'), 'danger');
+        return;
+      }
+
+      if (window.vetAuth) {
+        window.vetAuth.perfil = updated || { ...window.vetAuth.perfil, ...updates };
+      }
+
+      actualizarAlertaDatosIncompletos(window.vetAuth?.perfil);
+
+      const clientTitle = document.getElementById('currentClientTitle');
+      const clientSub = document.getElementById('currentClientSub');
+      let fullName = [updates.nombre, updates.apellido].filter(Boolean).join(' ');
+      if (!fullName) fullName = session.user.email?.split('@')[0] || 'Cliente';
+      if (clientTitle) clientTitle.textContent = `Cliente: ${fullName}`;
+      if (clientSub) clientSub.textContent = `${session.user.email}${updates.telefono ? ' | Tel: ' + updates.telefono : ''}`;
+
+      showToast('Tus datos fueron actualizados correctamente.', 'success');
+    });
+  }
+
+  // ==========================================
+  // SECCIÓN 3: FICHA DE MASCOTAS (tabla mascotas)
+  // ==========================================
+  const modalPetForm = document.getElementById('modalPetForm');
+  const petForm = document.getElementById('petForm');
+
+  const openPetModal = (petToEdit = null) => {
+    if (!modalPetForm || !petForm) return;
+
+    const session = window.vetAuth ? window.vetAuth.obtenerSesion() : null;
+    if (!session || !session.user) {
+      showToast('Iniciá sesión para registrar una mascota.', 'info');
+      window.vetAuth?.loginConGoogle();
+      return;
+    }
+
+    const titleEl = document.getElementById('modalPetFormTitle');
+    const idInput = document.getElementById('petFormId');
+    const nombreInput = document.getElementById('petFormNombre');
+    const especieSelect = document.getElementById('petFormEspecie');
+    const razaInput = document.getElementById('petFormRaza');
+    const sexoSelect = document.getElementById('petFormSexo');
+    const fechaInput = document.getElementById('petFormFechaNacimiento');
+    const pesoInput = document.getElementById('petFormPesoKg');
+    const castradoSelect = document.getElementById('petFormCastrado');
+    const notasInput = document.getElementById('petFormNotas');
+
+    if (fechaInput) {
+      fechaInput.max = getHoyArgentina();
+    }
+
+    if (petToEdit) {
+      if (titleEl) titleEl.textContent = `Editar Mascota: ${petToEdit.nombre}`;
+      if (idInput) idInput.value = petToEdit.id;
+      if (nombreInput) nombreInput.value = petToEdit.nombre || '';
+      if (especieSelect) especieSelect.value = petToEdit.especie || 'perro';
+      if (razaInput) razaInput.value = petToEdit.raza || '';
+      if (sexoSelect) sexoSelect.value = petToEdit.sexo || '';
+      if (fechaInput) fechaInput.value = petToEdit.fecha_nacimiento || '';
+      if (pesoInput) pesoInput.value = petToEdit.peso_kg || '';
+      if (castradoSelect) {
+        if (petToEdit.castrado === true) castradoSelect.value = 'true';
+        else if (petToEdit.castrado === false) castradoSelect.value = 'false';
+        else castradoSelect.value = '';
+      }
+      if (notasInput) notasInput.value = petToEdit.notas || '';
+    } else {
+      if (titleEl) titleEl.textContent = 'Registrar Nueva Mascota';
+      petForm.reset();
+      if (idInput) idInput.value = '';
+    }
+
+    openModal(modalPetForm);
+  };
+
+  const renderPortalMascotas = async () => {
+    const container = document.getElementById('portalPetsContainer');
+    if (!container) return;
+
+    const session = window.vetAuth ? window.vetAuth.obtenerSesion() : null;
+    if (!session || !session.user) {
+      container.innerHTML = `<p style="color: var(--slate-500); font-size: 0.9rem;">Iniciá sesión para ver tus mascotas.</p>`;
+      return;
+    }
+
+    container.innerHTML = `
+      <div class="loading-state">
+        <span class="loading-spinner"></span>
+        <p>Cargando fichas de mascotas...</p>
+      </div>
+    `;
+
+    const [mascotasRes, turnosRes] = await Promise.all([
+      window.vetApi.getMisMascotas(),
+      window.vetApi.getMisTurnos()
+    ]);
+
+    if (mascotasRes.error) {
+      container.innerHTML = `
+        <div class="error-state">
+          <p>No pudimos cargar tus mascotas.</p>
+          <button type="button" class="btn btn-outline btn-sm" id="btnRetryPets">🔄 Reintentar</button>
+        </div>
+      `;
+      document.getElementById('btnRetryPets')?.addEventListener('click', renderPortalMascotas);
+      return;
+    }
+
+    cacheMisMascotas = mascotasRes.data || [];
+    cacheMisTurnos = turnosRes.data || [];
+
+    const countBadge = document.getElementById('portalPetsCount');
+    if (countBadge) countBadge.textContent = cacheMisMascotas.length;
+
+    if (cacheMisMascotas.length === 0) {
+      container.innerHTML = `
+        <div class="empty-state">
+          <div style="font-size: 2.2rem; margin-bottom: 0.5rem;">🐾</div>
+          <p style="font-size: 1rem; font-weight: 600; color: var(--slate-700); margin-bottom: 0.35rem;">No tenés mascotas registradas aún</p>
+          <p style="color: var(--slate-500); font-size: 0.88rem; margin-bottom: 1rem;">Registrá a tu compañero para pedir turnos y llevar su historial médico.</p>
+          <button type="button" class="btn btn-primary btn-sm btn-open-add-pet">➕ Registrar mi primera mascota</button>
+        </div>
+      `;
+      container.querySelector('.btn-open-add-pet')?.addEventListener('click', () => openPetModal());
+      return;
+    }
+
+    const now = new Date();
+
+    container.innerHTML = `
+      <div class="pets-grid">
+        ${cacheMisMascotas.map(pet => {
+          const especieIcon = pet.especie === 'perro' ? '🐕' : (pet.especie === 'gato' ? '🐈' : '🐾');
+          const edadTexto = calcularEdad(pet.fecha_nacimiento);
+
+          const proximos = cacheMisTurnos.filter(t => {
+            if (t.mascota_id !== pet.id) return false;
+            if (t.estado === 'cancelado') return false;
+            return new Date(t.fecha_hora) >= now;
+          }).sort((a, b) => new Date(a.fecha_hora) - new Date(b.fecha_hora));
+
+          let castradoTexto = 'No sé';
+          if (pet.castrado === true) castradoTexto = 'Sí';
+          else if (pet.castrado === false) castradoTexto = 'No';
+
+          return `
+            <article class="pet-card">
+              <div class="pet-card-header">
+                <div class="pet-avatar-icon">${especieIcon}</div>
+                <div class="pet-title-box">
+                  <h4 class="pet-name">${esc(pet.nombre)}</h4>
+                  <div class="pet-subtitle">
+                    ${esc(pet.especie.toUpperCase())} ${pet.raza ? `· ${esc(pet.raza)}` : ''}
+                  </div>
+                </div>
+              </div>
+
+              <div class="pet-details-grid">
+                <div class="pet-detail-item">
+                  <span class="detail-label">Edad</span>
+                  <span class="detail-value">${esc(edadTexto)}</span>
+                </div>
+                <div class="pet-detail-item">
+                  <span class="detail-label">Sexo</span>
+                  <span class="detail-value">${esc(pet.sexo ? (pet.sexo === 'macho' ? 'Macho' : 'Hembra') : 'No indicado')}</span>
+                </div>
+                <div class="pet-detail-item">
+                  <span class="detail-label">Peso aprox.</span>
+                  <span class="detail-value">${pet.peso_kg ? `${esc(pet.peso_kg)} kg` : 'No indicado'}</span>
+                </div>
+                <div class="pet-detail-item">
+                  <span class="detail-label">Castrado/a</span>
+                  <span class="detail-value">${esc(castradoTexto)}</span>
+                </div>
+              </div>
+
+              ${pet.notas ? `
+                <div class="pet-notes">
+                  <strong>📝 Notas / Alergias:</strong> ${esc(pet.notas)}
+                </div>
+              ` : ''}
+
+              <div class="pet-appointments-section">
+                <div class="pet-appointments-title">🗓️ Próximos turnos:</div>
+                ${proximos.length > 0 ? `
+                  <ul class="pet-appointments-list">
+                    ${proximos.map(t => `
+                      <li class="pet-appointment-chip">
+                        <strong>${esc(t.servicios?.nombre || 'Consulta')}:</strong>
+                        ${formatDate(t.fecha_hora)}
+                        <span class="badge-status badge-${esc(t.estado)}" style="font-size: 0.7rem; padding: 0.1rem 0.35rem;">${esc(t.estado)}</span>
+                      </li>
+                    `).join('')}
+                  </ul>
+                ` : `
+                  <div class="pet-no-appointments">Sin turnos pendientes programados.</div>
+                `}
+              </div>
+
+              <div class="pet-card-actions">
+                <button type="button" class="btn btn-outline btn-sm btn-quick-book-pet" data-pet-id="${esc(pet.id)}">
+                  📅 Pedir Turno
+                </button>
+                <div style="display: flex; gap: 0.4rem;">
+                  <button type="button" class="btn btn-outline btn-sm btn-edit-pet" data-pet-id="${esc(pet.id)}" title="Editar ficha">
+                    ✏️ Editar
+                  </button>
+                  <button type="button" class="btn btn-outline btn-sm btn-delete-pet" data-pet-id="${esc(pet.id)}" data-pet-name="${esc(pet.nombre)}" title="Eliminar ficha" style="color: var(--danger);">
+                    🗑️
+                  </button>
+                </div>
+              </div>
+            </article>
+          `;
+        }).join('')}
+      </div>
+    `;
+
+    // Eventos de botones en tarjetas
+    container.querySelectorAll('.btn-quick-book-pet').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const petId = btn.getAttribute('data-pet-id');
+        openBookingModal(null, petId);
+      });
+    });
+
+    container.querySelectorAll('.btn-edit-pet').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const petId = btn.getAttribute('data-pet-id');
+        const pet = cacheMisMascotas.find(m => String(m.id) === String(petId));
+        if (pet) openPetModal(pet);
+      });
+    });
+
+    container.querySelectorAll('.btn-delete-pet').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const petId = btn.getAttribute('data-pet-id');
+        const petName = btn.getAttribute('data-pet-name') || 'esta mascota';
+        const confirma = confirm(`¿Estás seguro de que querés eliminar la ficha de ${petName}?`);
+        if (!confirma) return;
+
+        btn.disabled = true;
+        const { error } = await window.vetApi.eliminarMascota(petId);
+        if (error) {
+          btn.disabled = false;
+          const msg = String(error.message || '');
+          if (msg.includes('turnos asociados') || error.code === '23503') {
+            showToast('No se puede eliminar porque tiene turnos asociados', 'danger');
+          } else {
+            showToast(msg || 'Error al eliminar mascota', 'danger');
+          }
+          return;
+        }
+
+        showToast(`Ficha de "${petName}" eliminada correctamente.`, 'info');
+        await Promise.all([renderPortalMascotas(), renderPortalTurnos()]);
+      });
+    });
+  };
+
+  // Submit de ficha de mascota (alta o edición)
+  if (petForm) {
+    petForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const idVal = document.getElementById('petFormId')?.value;
+      const nombre = document.getElementById('petFormNombre')?.value.trim();
+      const especie = document.getElementById('petFormEspecie')?.value;
+      const raza = document.getElementById('petFormRaza')?.value.trim() || null;
+      const sexo = document.getElementById('petFormSexo')?.value || null;
+      const fechaNac = document.getElementById('petFormFechaNacimiento')?.value || null;
+      const pesoVal = document.getElementById('petFormPesoKg')?.value;
+      const castradoVal = document.getElementById('petFormCastrado')?.value;
+      const notas = document.getElementById('petFormNotas')?.value.trim() || null;
+
+      if (!nombre) {
+        showToast('El nombre de la mascota es obligatorio.', 'warning');
+        return;
+      }
+
+      if (!especie || !['perro', 'gato', 'otro'].includes(especie)) {
+        showToast('La especie es obligatoria (perro, gato u otro).', 'warning');
+        return;
+      }
+
+      if (fechaNac && fechaNac > getHoyArgentina()) {
+        showToast('La fecha de nacimiento no puede ser futura.', 'warning');
+        return;
+      }
+
+      let pesoKg = null;
+      if (pesoVal !== '' && pesoVal !== undefined && pesoVal !== null) {
+        pesoKg = Number(pesoVal);
+        if (isNaN(pesoKg) || pesoKg <= 0) {
+          showToast('El peso debe ser mayor a 0 kg.', 'warning');
+          return;
+        }
+      }
+
+      let castrado = null;
+      if (castradoVal === 'true') castrado = true;
+      else if (castradoVal === 'false') castrado = false;
+
+      const petData = {
+        nombre,
+        especie,
+        raza,
+        sexo,
+        fecha_nacimiento: fechaNac,
+        peso_kg: pesoKg,
+        castrado,
+        notas
+      };
+
+      const btnSave = document.getElementById('btnSavePet');
+      if (btnSave) {
+        btnSave.disabled = true;
+        btnSave.textContent = 'Guardando...';
+      }
+
+      let result;
+      if (idVal) {
+        result = await window.vetApi.actualizarMascota(idVal, petData);
+      } else {
+        result = await window.vetApi.crearMascota(petData);
+      }
+
+      if (btnSave) {
+        btnSave.disabled = false;
+        btnSave.textContent = 'Guardar Mascota';
+      }
+
+      if (result.error) {
+        showToast('Error al guardar mascota: ' + (result.error.message || 'Error desconocido'), 'danger');
+        return;
+      }
+
+      closeModal(modalPetForm);
+      petForm.reset();
+      showToast(idVal ? 'Mascota actualizada correctamente.' : `Mascota "${nombre}" registrada con éxito.`, 'success');
+
+      await Promise.all([renderPortalMascotas(), renderPortalTurnos()]);
+
+      // Si el modal de reserva está abierto, actualizar su select de mascotas y preseleccionar la recién creada
+      if (modalBooking && modalBooking.classList.contains('active')) {
+        await popularSelectMascotasBooking(result.data?.id);
+      }
+    });
+  }
+
+  // Delegación de botones para abrir alta de mascota
+  document.querySelectorAll('.btn-open-add-pet').forEach(btn => {
+    btn.addEventListener('click', () => openPetModal());
   });
 
   // ==========================================
-  // TURNOS Y MASCOTAS (Módulo en transición / Fase 3)
+  // SECCIÓN 4: RESERVA DE TURNOS (modalBooking)
   // ==========================================
   const modalBooking = document.getElementById('modalBooking');
   const bookingForm = document.getElementById('bookingForm');
-  const modalAddPet = document.getElementById('modalAddPet');
-  const btnAddNewPet = document.getElementById('btnAddNewPet');
-  const addPetForm = document.getElementById('addPetForm');
   const btnHeroReserve = document.getElementById('btnHeroReserve');
   const btnMainBooking = document.getElementById('btnMainBooking');
   const btnPortalNewBooking = document.getElementById('btnPortalNewBooking');
 
-  const openBookingModal = (preselectedServiceId = null) => {
+  const popularSelectMascotasBooking = async (preselectId = null) => {
+    const select = document.getElementById('bookingPetSelect');
+    const noticeNoPets = document.getElementById('bookingPetNoticeNoPets');
+    const btnConfirm = document.getElementById('btnConfirmBooking');
+    if (!select) return;
+
+    const { data: mascotas } = await window.vetApi.getMisMascotas();
+    const list = mascotas || [];
+
+    if (list.length === 0) {
+      if (noticeNoPets) noticeNoPets.style.display = 'block';
+      select.innerHTML = `
+        <option value="">-- No tenés mascotas registradas --</option>
+        <option value="new">➕ Registrar una mascota nueva...</option>
+      `;
+      if (btnConfirm) btnConfirm.disabled = true;
+    } else {
+      if (noticeNoPets) noticeNoPets.style.display = 'none';
+      if (btnConfirm) btnConfirm.disabled = false;
+      select.innerHTML = `
+        <option value="">Seleccioná tu mascota...</option>
+        ${list.map(m => `
+          <option value="${esc(m.id)}" ${String(preselectId) === String(m.id) ? 'selected' : ''}>
+            ${esc(m.nombre)} (${esc(m.especie)}${m.raza ? ` · ${esc(m.raza)}` : ''})
+          </option>
+        `).join('')}
+        <option value="new">➕ Agregar una mascota nueva...</option>
+      `;
+    }
+  };
+
+  const calcularHorariosDisponibles = async () => {
+    const serviceSelect = document.getElementById('bookingServiceSelect');
     const dateInput = document.getElementById('bookingDate');
-    const today = new Date().toISOString().split('T')[0];
-    if (dateInput) {
-      dateInput.min = today;
-      if (!dateInput.value) dateInput.value = today;
+    const timeSelect = document.getElementById('bookingTimeSelect');
+    const serviceInfo = document.getElementById('bookingServiceInfo');
+    if (!serviceSelect || !dateInput || !timeSelect) return;
+
+    const serviceId = serviceSelect.value;
+    const fecha = dateInput.value;
+
+    if (!serviceId || !fecha) {
+      timeSelect.innerHTML = '<option value="">Primero seleccioná servicio y fecha...</option>';
+      timeSelect.disabled = true;
+      if (serviceInfo) serviceInfo.textContent = '';
+      return;
     }
 
-    if (preselectedServiceId) {
-      const select = document.getElementById('bookingServiceSelect');
-      if (select) select.value = preselectedServiceId;
+    const service = catalogServices.find(s => String(s.id) === String(serviceId));
+    const duracionMin = service ? Number(service.duracion_min) : 30;
+
+    if (serviceInfo && service) {
+      serviceInfo.textContent = `⏱️ Duración: ${duracionMin} min · Precio: ${formatCurrency(service.precio)}`;
     }
 
-    // Precargar datos del cliente
-    const perfil = window.vetAuth ? window.vetAuth.obtenerPerfil() : null;
+    timeSelect.disabled = true;
+    timeSelect.innerHTML = '<option value="">Consultando disponibilidad...</option>';
+
+    // Determinar día de la semana en la fecha elegida (UTC noon evita desfasajes de zona horaria)
+    const [y, m, d] = fecha.split('-').map(Number);
+    const dateObj = new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
+    const dayOfWeek = dateObj.getUTCDay();
+
+    const dayConfig = HORARIOS_CONFIG.dias[dayOfWeek];
+    if (!dayConfig) {
+      timeSelect.innerHTML = '<option value="" disabled selected>Domingos cerrado. Elegí otra fecha.</option>';
+      timeSelect.disabled = true;
+      return;
+    }
+
+    // Consulta RPC a Supabase horarios_ocupados
+    const { data: ocupadosIsoList } = await window.vetApi.getHorariosOcupados(serviceId, fecha);
+
+    const ocupadosSet = new Set();
+    (ocupadosIsoList || []).forEach(iso => {
+      try {
+        const dObj = new Date(iso);
+        const formatter = new Intl.DateTimeFormat('es-AR', {
+          timeZone: 'America/Argentina/Buenos_Aires',
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false
+        });
+        ocupadosSet.add(formatter.format(dObj));
+      } catch (e) {
+        console.warn('Error al formatear ocupado:', iso, e);
+      }
+    });
+
+    const toMin = (hhmm) => {
+      const [h, min] = hhmm.split(':').map(Number);
+      return (h * 60) + min;
+    };
+
+    const toHhmm = (minutos) => {
+      const h = Math.floor(minutos / 60);
+      const min = minutos % 60;
+      return `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
+    };
+
+    const inicioMin = toMin(dayConfig.inicio);
+    const finMin = toMin(dayConfig.fin);
+    const slotStep = HORARIOS_CONFIG.slotMinutes;
+
+    const hoyArgentina = getHoyArgentina();
+    const esHoy = fecha === hoyArgentina;
+    const minutosActuales = esHoy ? getMinutosActualesArgentina() : -1;
+
+    const slots = [];
+    // Los turnos inician cada 30 min y deben terminar antes del cierre según la duración del servicio
+    for (let start = inicioMin; start + duracionMin <= finMin; start += slotStep) {
+      const horaStr = toHhmm(start);
+      const yaPaso = esHoy && (start <= minutosActuales);
+      const estaOcupado = ocupadosSet.has(horaStr);
+
+      slots.push({
+        hora: horaStr,
+        disponible: !yaPaso && !estaOcupado,
+        razon: yaPaso ? 'Pasado' : (estaOcupado ? 'Ocupado' : null)
+      });
+    }
+
+    if (slots.length === 0) {
+      timeSelect.innerHTML = '<option value="" disabled selected>No hay horarios que cubran la duración del servicio hoy.</option>';
+      timeSelect.disabled = true;
+      return;
+    }
+
+    const disponiblesCount = slots.filter(s => s.disponible).length;
+
+    let optionsHtml = `<option value="">Seleccioná un horario (${disponiblesCount} disponibles)...</option>`;
+    slots.forEach(s => {
+      if (s.disponible) {
+        optionsHtml += `<option value="${esc(s.hora)}">${esc(s.hora)} hs</option>`;
+      } else {
+        optionsHtml += `<option value="${esc(s.hora)}" disabled>${esc(s.hora)} hs (${esc(s.razon)})</option>`;
+      }
+    });
+
+    timeSelect.innerHTML = optionsHtml;
+    timeSelect.disabled = false;
+  };
+
+  const openBookingModal = async (preselectedServiceId = null, preselectedPetId = null) => {
     const session = window.vetAuth ? window.vetAuth.obtenerSesion() : null;
+    const perfil = window.vetAuth ? window.vetAuth.obtenerPerfil() : null;
 
-    if (perfil) {
-      if (document.getElementById('bookingClientName')) document.getElementById('bookingClientName').value = perfil.nombre || '';
-      if (document.getElementById('bookingClientLastname')) document.getElementById('bookingClientLastname').value = perfil.apellido || '';
-      if (document.getElementById('bookingClientEmail')) document.getElementById('bookingClientEmail').value = perfil.email || '';
-      if (document.getElementById('bookingClientPhone')) document.getElementById('bookingClientPhone').value = perfil.telefono || '';
-    } else if (session?.user) {
-      if (document.getElementById('bookingClientEmail')) document.getElementById('bookingClientEmail').value = session.user.email || '';
-    } else if (window.vetDB) {
-      const demoClient = window.vetDB.getById('clientes', currentClientId);
-      if (demoClient) {
-        if (document.getElementById('bookingClientName')) document.getElementById('bookingClientName').value = demoClient.nombre;
-        if (document.getElementById('bookingClientLastname')) document.getElementById('bookingClientLastname').value = demoClient.apellido;
-        if (document.getElementById('bookingClientEmail')) document.getElementById('bookingClientEmail').value = demoClient.email;
-        if (document.getElementById('bookingClientPhone')) document.getElementById('bookingClientPhone').value = demoClient.telefono || '';
+    if (!session || !session.user) {
+      if (preselectedServiceId) {
+        sessionStorage.setItem('vet_pending_booking_service', String(preselectedServiceId));
+      }
+      showToast('Iniciá sesión con Google para agendar un turno.', 'info');
+      window.vetAuth?.loginConGoogle();
+      return;
+    }
+
+    // Datos del tutor
+    const tutorNameEl = document.getElementById('bookingTutorName');
+    const tutorEmailEl = document.getElementById('bookingTutorEmail');
+    let tutorNombre = [perfil?.nombre, perfil?.apellido].filter(Boolean).join(' ');
+    if (!tutorNombre) tutorNombre = session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'Tutor';
+    if (tutorNameEl) tutorNameEl.textContent = tutorNombre;
+    if (tutorEmailEl) tutorEmailEl.textContent = perfil?.email || session.user.email || '';
+
+    // Si falta el teléfono en el perfil, pedirlo en el modal
+    const phoneGroup = document.getElementById('bookingPhoneGroup');
+    const phoneInput = document.getElementById('bookingPhone');
+    if (phoneGroup && phoneInput) {
+      if (!perfil?.telefono || !perfil.telefono.trim()) {
+        phoneGroup.style.display = 'block';
+        phoneInput.required = true;
+        phoneInput.value = '';
+      } else {
+        phoneGroup.style.display = 'none';
+        phoneInput.required = false;
+        phoneInput.value = perfil.telefono;
       }
     }
+
+    // Restricciones de fecha: hoy a +60 días
+    const dateInput = document.getElementById('bookingDate');
+    const minDate = getHoyArgentina();
+    const maxDate = getMaxFechaArgentina();
+    if (dateInput) {
+      dateInput.min = minDate;
+      dateInput.max = maxDate;
+      if (!dateInput.value || dateInput.value < minDate || dateInput.value > maxDate) {
+        dateInput.value = minDate;
+      }
+    }
+
+    // Cargar opciones de servicios
+    const serviceSelect = document.getElementById('bookingServiceSelect');
+    if (serviceSelect && (serviceSelect.options.length <= 1 || catalogServices.length > 0)) {
+      serviceSelect.innerHTML = catalogServices.map(s => `
+        <option value="${esc(s.id)}">${esc(s.nombre)} (${esc(s.duracion_min)} min - ${formatCurrency(s.precio)})</option>
+      `).join('');
+    }
+
+    if (preselectedServiceId && serviceSelect) {
+      serviceSelect.value = preselectedServiceId;
+    }
+
+    // Cargar mascotas del usuario
+    await popularSelectMascotasBooking(preselectedPetId);
+
+    // Calcular horarios según servicio y fecha
+    await calcularHorariosDisponibles();
 
     openModal(modalBooking);
   };
 
+  const bookingPetSelect = document.getElementById('bookingPetSelect');
+  if (bookingPetSelect) {
+    bookingPetSelect.addEventListener('change', () => {
+      if (bookingPetSelect.value === 'new') {
+        openPetModal();
+      }
+    });
+  }
+
+  const bookingServiceSelect = document.getElementById('bookingServiceSelect');
+  if (bookingServiceSelect) {
+    bookingServiceSelect.addEventListener('change', calcularHorariosDisponibles);
+  }
+
+  const bookingDate = document.getElementById('bookingDate');
+  if (bookingDate) {
+    bookingDate.addEventListener('change', calcularHorariosDisponibles);
+  }
+
   if (btnHeroReserve) btnHeroReserve.addEventListener('click', () => openBookingModal());
   if (btnMainBooking) btnMainBooking.addEventListener('click', () => openBookingModal());
   if (btnPortalNewBooking) btnPortalNewBooking.addEventListener('click', () => openBookingModal());
+  document.querySelectorAll('.btn-open-booking-direct').forEach(btn => {
+    btn.addEventListener('click', () => openBookingModal());
+  });
 
-  if (bookingForm && window.vetDB) {
-    bookingForm.addEventListener('submit', (e) => {
+  // Submit de reserva de turno
+  if (bookingForm) {
+    bookingForm.addEventListener('submit', async (e) => {
       e.preventDefault();
 
-      const serviceId = Number(document.getElementById('bookingServiceSelect').value);
-      const dateVal = document.getElementById('bookingDate').value;
-      const timeVal = document.getElementById('bookingTime').value;
-      const combinedDateTime = new Date(`${dateVal}T${timeVal}:00`).toISOString();
+      const session = window.vetAuth ? window.vetAuth.obtenerSesion() : null;
+      const perfil = window.vetAuth ? window.vetAuth.obtenerPerfil() : null;
 
-      const petName = document.getElementById('bookingPetName').value.trim();
-      const petBreed = document.getElementById('bookingPetBreed').value.trim();
-      const petBirth = document.getElementById('bookingPetBirth').value;
-      const notes = document.getElementById('bookingNotes').value.trim();
-
-      const clientName = document.getElementById('bookingClientName').value.trim();
-      const clientLastname = document.getElementById('bookingClientLastname').value.trim();
-      const clientEmail = document.getElementById('bookingClientEmail').value.trim();
-      const clientPhone = document.getElementById('bookingClientPhone').value.trim();
-
-      let client = window.vetDB.filter('clientes', c => c.email.toLowerCase() === clientEmail.toLowerCase())[0];
-      if (!client) {
-        client = window.vetDB.insert('clientes', {
-          nombre: clientName,
-          apellido: clientLastname,
-          email: clientEmail,
-          telefono: clientPhone,
-          direccion: 'A coordinar',
-          password_hash: 'auto_token'
-        });
+      if (!session || !session.user) {
+        showToast('Debés iniciar sesión para reservar un turno.', 'warning');
+        window.vetAuth?.loginConGoogle();
+        return;
       }
 
-      let pet = window.vetDB.filter('mascotas', m => m.cliente_id === client.id && m.nombre.toLowerCase() === petName.toLowerCase())[0];
-      if (!pet) {
-        pet = window.vetDB.insert('mascotas', {
-          cliente_id: client.id,
-          nombre: petName,
-          raza: petBreed || 'No especificada',
-          fecha_nacimiento: petBirth || null,
-          notas: notes || null
-        });
+      const mascotaId = document.getElementById('bookingPetSelect')?.value;
+      const servicioId = document.getElementById('bookingServiceSelect')?.value;
+      const fecha = document.getElementById('bookingDate')?.value;
+      const hora = document.getElementById('bookingTimeSelect')?.value;
+      const notas = document.getElementById('bookingNotes')?.value.trim();
+
+      if (!mascotaId || mascotaId === 'new') {
+        showToast('Por favor seleccioná o registrá una mascota.', 'warning');
+        return;
       }
 
-      const nuevoTurno = window.vetDB.insert('turnos', {
-        cliente_id: client.id,
-        mascota_id: pet.id,
-        servicio_id: serviceId,
-        fecha_hora: combinedDateTime,
-        estado: 'reservado',
-        notas: notes || 'Turno solicitado online'
+      if (!servicioId) {
+        showToast('Por favor seleccioná un servicio.', 'warning');
+        return;
+      }
+
+      if (!fecha || !hora) {
+        showToast('Por favor seleccioná fecha y horario disponible.', 'warning');
+        return;
+      }
+
+      // Guardar teléfono en perfil si faltaba
+      const phoneInput = document.getElementById('bookingPhone');
+      if (phoneInput && (!perfil?.telefono || !perfil.telefono.trim())) {
+        const phoneVal = phoneInput.value.trim();
+        if (!phoneVal) {
+          showToast('Por favor completá un teléfono de contacto.', 'warning');
+          phoneInput.focus();
+          return;
+        }
+        await window.vetApi.actualizarPerfil(session.user.id, { telefono: phoneVal });
+        if (window.vetAuth && window.vetAuth.perfil) {
+          window.vetAuth.perfil.telefono = phoneVal;
+        }
+      }
+
+      // Armar fecha_hora como ISO 8601 con offset -03:00 (hora de Argentina), no con la zona del navegador
+      const fechaHora = `${fecha}T${hora}:00-03:00`;
+
+      const btnConfirm = document.getElementById('btnConfirmBooking');
+      if (btnConfirm) {
+        btnConfirm.disabled = true;
+        btnConfirm.textContent = '⏳ Reservando...';
+      }
+
+      const { error } = await window.vetApi.crearTurno({
+        mascotaId,
+        servicioId,
+        fechaHora,
+        notas
       });
+
+      if (btnConfirm) {
+        btnConfirm.disabled = false;
+        btnConfirm.textContent = '📅 Confirmar Reserva de Turno';
+      }
+
+      if (error) {
+        const errorMsg = String(error.message || '');
+        if (error.code === '23505' || errorMsg.includes('turnos_horario_unico') || errorMsg.includes('se acaba de ocupar')) {
+          showToast('Ese horario se acaba de ocupar, elegí otro', 'danger');
+        } else {
+          showToast(errorMsg || 'No se pudo reservar el turno. Probá nuevamente.', 'danger');
+        }
+        await calcularHorariosDisponibles();
+        return;
+      }
 
       closeModal(modalBooking);
       bookingForm.reset();
-      renderPortalMascotasYTurnos();
-      showToast(`¡Turno #${nuevoTurno.id} reservado con éxito para ${pet.nombre}!`, 'success');
+      showToast('Turno reservado. Te vamos a confirmar a la brevedad', 'success');
+
+      await Promise.all([renderPortalTurnos(), renderPortalMascotas()]);
+      activarTabPortal('turnos');
     });
   }
 
-  if (btnAddNewPet) btnAddNewPet.addEventListener('click', () => openModal(modalAddPet));
+  // ==========================================
+  // SECCIÓN 5: MIS TURNOS (turnos)
+  // ==========================================
+  const renderPortalTurnos = async () => {
+    const container = document.getElementById('portalAppointmentsContainer');
+    if (!container) return;
 
-  if (addPetForm && window.vetDB) {
-    addPetForm.addEventListener('submit', (e) => {
-      e.preventDefault();
-      const name = document.getElementById('newPetName').value.trim();
-      const breed = document.getElementById('newPetBreed').value.trim();
-      const birth = document.getElementById('newPetBirth').value;
-      const notes = document.getElementById('newPetNotes').value.trim();
+    const session = window.vetAuth ? window.vetAuth.obtenerSesion() : null;
+    if (!session || !session.user) {
+      container.innerHTML = `<p style="color: var(--slate-500); font-size: 0.9rem;">Iniciá sesión para ver tus turnos.</p>`;
+      return;
+    }
 
-      const newPet = window.vetDB.insert('mascotas', {
-        cliente_id: currentClientId,
-        nombre: name,
-        raza: breed || 'Mestizo',
-        fecha_nacimiento: birth || null,
-        notas: notes || null
-      });
+    container.innerHTML = `
+      <div class="loading-state">
+        <span class="loading-spinner"></span>
+        <p>Cargando tus turnos...</p>
+      </div>
+    `;
 
-      closeModal(modalAddPet);
-      addPetForm.reset();
-      renderPortalMascotasYTurnos();
-      showToast(`Mascota "${newPet.nombre}" registrada correctamente.`, 'success');
-    });
-  }
+    const { data: turnos, error } = await window.vetApi.getMisTurnos();
 
-  const renderPortalMascotasYTurnos = () => {
-    if (!window.vetDB) return;
+    if (error) {
+      container.innerHTML = `
+        <div class="error-state">
+          <p>No pudimos cargar tus turnos en este momento.</p>
+          <button type="button" class="btn btn-outline btn-sm" id="btnRetryTurnos">🔄 Reintentar</button>
+        </div>
+      `;
+      document.getElementById('btnRetryTurnos')?.addEventListener('click', renderPortalTurnos);
+      return;
+    }
 
-    const petsContainer = document.getElementById('petsListContainer');
-    const appContainer = document.getElementById('appointmentsListContainer');
-    const petBadge = document.getElementById('petCountBadge');
-    const appBadge = document.getElementById('appointmentsCountBadge');
+    const list = turnos || [];
+    cacheMisTurnos = list;
 
-    // Mascotas
-    const pets = window.vetDB.filter('mascotas', m => m.cliente_id === currentClientId);
-    if (petBadge) petBadge.textContent = pets.length;
+    const countBadge = document.getElementById('portalAppointmentsCount');
+    if (countBadge) countBadge.textContent = list.length;
 
-    if (petsContainer) {
-      if (pets.length === 0) {
-        petsContainer.innerHTML = `<p style="color: var(--slate-500); font-size: 0.9rem;">No tenés mascotas registradas aún.</p>`;
-      } else {
-        petsContainer.innerHTML = pets.map(pet => `
-          <div style="background: var(--slate-50); border: 1px solid var(--slate-200); border-radius: var(--radius-md); padding: 1.1rem; display: flex; align-items: flex-start; justify-content: space-between; gap: 0.75rem;">
+    if (list.length === 0) {
+      container.innerHTML = `
+        <div class="empty-state">
+          <div style="font-size: 2.2rem; margin-bottom: 0.5rem;">🗓️</div>
+          <p style="font-size: 1rem; font-weight: 600; color: var(--slate-700); margin-bottom: 0.35rem;">No tenés turnos programados ni historial</p>
+          <p style="color: var(--slate-500); font-size: 0.88rem; margin-bottom: 1rem;">Agendá una consulta médica veterinaria o servicio de peluquería para tu mascota.</p>
+          <button type="button" class="btn btn-primary btn-sm btn-open-booking-direct">📅 Agendar un Turno</button>
+        </div>
+      `;
+      container.querySelector('.btn-open-booking-direct')?.addEventListener('click', () => openBookingModal());
+      return;
+    }
+
+    const now = new Date();
+
+    // Próximos primero y luego historial
+    const proximos = list
+      .filter(t => t.estado !== 'cancelado' && new Date(t.fecha_hora) >= now)
+      .sort((a, b) => new Date(a.fecha_hora) - new Date(b.fecha_hora));
+
+    const historial = list
+      .filter(t => t.estado === 'cancelado' || new Date(t.fecha_hora) < now)
+      .sort((a, b) => new Date(b.fecha_hora) - new Date(a.fecha_hora));
+
+    const renderTurnoCard = (t, esProximo) => {
+      const isFuture = new Date(t.fecha_hora) >= now;
+      const canCancel = esProximo && isFuture && (t.estado === 'reservado' || t.estado === 'confirmado');
+
+      const badgeLabel = {
+        reservado: 'Reservado',
+        confirmado: 'Confirmado',
+        realizado: 'Realizado',
+        cancelado: 'Cancelado'
+      }[t.estado] || t.estado;
+
+      return `
+        <article class="appointment-card" data-appointment-id="${esc(t.id)}">
+          <div class="appointment-header">
             <div>
-              <div style="font-weight: 700; font-size: 1.05rem; color: var(--slate-900);">
-                🐾 ${esc(pet.nombre)}
-              </div>
-              <div style="font-size: 0.82rem; color: var(--slate-600); margin: 0.2rem 0;">
-                <strong>Raza:</strong> ${esc(pet.raza || 'Común')} | 
-                <strong>Nacimiento:</strong> ${esc(pet.fecha_nacimiento || 'No especificado')}
-              </div>
-              ${pet.notas ? `<div style="font-size: 0.8rem; color: var(--slate-500); margin-top: 0.35rem; background: #fff; padding: 0.4rem 0.6rem; border-radius: 6px; border: 1px dashed var(--slate-300);">📝 ${esc(pet.notas)}</div>` : ''}
+              <span class="badge-status badge-${esc(t.estado)}">${esc(badgeLabel)}</span>
             </div>
-            <button type="button" class="btn btn-outline btn-sm btn-quick-book" data-pet-name="${esc(pet.nombre)}" style="font-size: 0.78rem; padding: 0.3rem 0.65rem;">
-              Pedir Turno
-            </button>
+            <span class="appointment-id">Turno #${esc(t.id)}</span>
           </div>
-        `).join('');
 
-        petsContainer.querySelectorAll('.btn-quick-book').forEach(btn => {
-          btn.addEventListener('click', () => {
-            const petName = btn.getAttribute('data-pet-name');
-            openBookingModal();
-            const petInput = document.getElementById('bookingPetName');
-            if (petInput) petInput.value = petName;
-          });
-        });
-      }
-    }
-
-    // Turnos
-    const turnos = window.vetDB.getTurnosDetallados().filter(t => t.cliente_id === currentClientId);
-    if (appBadge) appBadge.textContent = turnos.length;
-
-    if (appContainer) {
-      if (turnos.length === 0) {
-        appContainer.innerHTML = `<p style="color: var(--slate-500); font-size: 0.9rem;">No tenés turnos programados.</p>`;
-      } else {
-        appContainer.innerHTML = turnos.map(t => `
-          <div style="background: var(--slate-50); border: 1px solid var(--slate-200); border-radius: var(--radius-md); padding: 1.1rem;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-              <span class="badge-status badge-${esc(t.estado)}">${esc(t.estado)}</span>
-              <span style="font-size: 0.78rem; color: var(--slate-500);">ID #${esc(t.id)}</span>
-            </div>
-            <div style="font-weight: 700; color: var(--slate-900); font-size: 0.95rem;">
-              ${esc(t.servicio?.nombre || 'Servicio')}
-            </div>
-            <div style="font-size: 0.82rem; color: var(--slate-600); margin: 0.25rem 0;">
-              🐶 Paciente: <strong>${esc(t.mascota?.nombre || 'Mascota')}</strong> (${esc(t.mascota?.raza || 'Común')})
-            </div>
-            <div style="font-size: 0.85rem; font-weight: 600; color: var(--primary-700); margin-top: 0.4rem;">
-              🗓️ ${formatDate(t.fecha_hora)}
-            </div>
-            ${t.estado !== 'cancelado' ? `
-              <div style="display: flex; gap: 0.5rem; margin-top: 0.75rem; padding-top: 0.5rem; border-top: 1px solid var(--slate-200);">
-                <button type="button" class="btn btn-outline btn-sm btn-cancel-appointment" data-turno-id="${esc(t.id)}" style="font-size: 0.75rem; padding: 0.25rem 0.5rem; color: var(--danger);">
-                  Cancelar turno
-                </button>
-              </div>
-            ` : ''}
+          <div class="appointment-service-name">
+            ${esc(t.servicios?.icono || '🩺')} ${esc(t.servicios?.nombre || 'Servicio Veterinario')}
           </div>
-        `).join('');
 
-        appContainer.querySelectorAll('.btn-cancel-appointment').forEach(btn => {
-          btn.addEventListener('click', () => {
-            const tId = Number(btn.getAttribute('data-turno-id'));
-            window.vetDB.update('turnos', tId, { estado: 'cancelado' });
-            renderPortalMascotasYTurnos();
-            showToast(`Turno #${tId} cancelado.`, 'info');
-          });
-        });
-      }
-    }
+          <div class="appointment-pet-info">
+            🐾 Paciente: <strong>${esc(t.mascotas?.nombre || 'Mascota')}</strong>
+            ${t.mascotas?.especie ? `(${esc(t.mascotas.especie)}${t.mascotas.raza ? ` · ${esc(t.mascotas.raza)}` : ''})` : ''}
+          </div>
+
+          <div class="appointment-time">
+            🗓️ ${formatDate(t.fecha_hora)}
+          </div>
+
+          ${t.notas ? `
+            <div class="appointment-notes">
+              <strong>Motivo / Notas:</strong> ${esc(t.notas)}
+            </div>
+          ` : ''}
+
+          ${canCancel ? `
+            <div class="appointment-actions">
+              <button type="button" class="btn btn-outline btn-sm btn-cancel-turno" data-turno-id="${esc(t.id)}">
+                ❌ Cancelar turno
+              </button>
+            </div>
+          ` : ''}
+        </article>
+      `;
+    };
+
+    container.innerHTML = `
+      ${proximos.length > 0 ? `
+        <div style="margin-bottom: 2rem;">
+          <h4 style="font-size: 1rem; font-weight: 700; color: var(--slate-800); margin-bottom: 0.85rem; display: flex; align-items: center; gap: 0.5rem;">
+            <span>🟢</span> Próximos Turnos (${proximos.length})
+          </h4>
+          <div class="appointments-grid">
+            ${proximos.map(t => renderTurnoCard(t, true)).join('')}
+          </div>
+        </div>
+      ` : `
+        <div style="background: var(--slate-50); border: 1px dashed var(--slate-300); padding: 1.25rem; border-radius: var(--radius-md); margin-bottom: 2rem; text-align: center;">
+          <p style="color: var(--slate-600); font-size: 0.9rem; margin-bottom: 0.6rem;">No tenés turnos activos próximos.</p>
+          <button type="button" class="btn btn-primary btn-sm btn-open-booking-direct">📅 Solicitar un Turno</button>
+        </div>
+      `}
+
+      ${historial.length > 0 ? `
+        <div>
+          <h4 style="font-size: 1rem; font-weight: 700; color: var(--slate-700); margin-bottom: 0.85rem; display: flex; align-items: center; gap: 0.5rem;">
+            <span>📋</span> Historial de Turnos (${historial.length})
+          </h4>
+          <div class="appointments-grid">
+            ${historial.map(t => renderTurnoCard(t, false)).join('')}
+          </div>
+        </div>
+      ` : ''}
+    `;
+
+    container.querySelectorAll('.btn-open-booking-direct').forEach(btn => {
+      btn.addEventListener('click', () => openBookingModal());
+    });
+
+    container.querySelectorAll('.btn-cancel-turno').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const tId = btn.getAttribute('data-turno-id');
+        const confirma = confirm(`¿Estás seguro de que querés cancelar el turno #${tId}?`);
+        if (!confirma) return;
+
+        btn.disabled = true;
+        btn.textContent = '⏳ Cancelando...';
+
+        const { error } = await window.vetApi.cancelarTurno(tId);
+        if (error) {
+          btn.disabled = false;
+          btn.textContent = '❌ Cancelar turno';
+          showToast('No se pudo cancelar el turno: ' + (error.message || 'Error desconocido'), 'danger');
+          return;
+        }
+
+        showToast(`Turno #${tId} cancelado.`, 'info');
+        await Promise.all([renderPortalTurnos(), renderPortalMascotas()]);
+      });
+    });
   };
+
+  // ==========================================
+  // SINCRONIZACIÓN CON EVENTOS DE AUTENTICACIÓN
+  // ==========================================
+  document.addEventListener('vet:authchange', async (e) => {
+    const { session } = e.detail || {};
+
+    if (session && session.user) {
+      if (modalCheckout && modalCheckout.classList.contains('active')) {
+        openCheckoutModal();
+      }
+
+      // Reabrir modal de turno si el usuario venía de cliquear "Agendar" sin sesión
+      const pendingService = sessionStorage.getItem('vet_pending_booking_service');
+      if (pendingService) {
+        sessionStorage.removeItem('vet_pending_booking_service');
+        setTimeout(() => {
+          openBookingModal(pendingService);
+        }, 300);
+      }
+
+      await actualizarPortalSegunAuth();
+    } else {
+      await actualizarPortalSegunAuth();
+    }
+  });
 
   // ==========================================
   // HELPERS DE MODALES
@@ -1403,19 +2263,27 @@ document.addEventListener('DOMContentLoaded', () => {
   // ==========================================
   // INICIALIZACIÓN DE LA APLICACIÓN
   // ==========================================
-  // 1. Cargar carrito desde localStorage
+  // 1. Borrar datos de prueba residuales de localStorage (Fase 3 - Regla 6)
+  try {
+    localStorage.removeItem('entre_mascotas_db_v1');
+  } catch (e) {
+    console.warn('No se pudo limpiar localStorage:', e);
+  }
+
+  // 2. Cargar carrito desde localStorage
   cart = loadCartFromStorage();
   updateCartUI();
 
-  // 2. Cargar servicios veterinarios desde Supabase
+  // 3. Cargar servicios veterinarios desde Supabase
   renderServices();
 
-  // 3. Cargar catálogo de categorías y productos desde Supabase
+  // 4. Cargar catálogo de categorías y productos desde Supabase
   loadCatalog();
 
-  // 4. Cargar portal inicial
-  renderPortalMascotasYTurnos();
+  // 5. Cargar portal inicial según sesión actual
+  actualizarPortalSegunAuth();
 
-  // 5. Verificar parámetros de retorno de Mercado Pago
+  // 6. Verificar parámetros de retorno de Mercado Pago
   verificarRetornoMercadoPago();
 });
+
